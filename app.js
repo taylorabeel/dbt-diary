@@ -3758,7 +3758,7 @@ var TABS = [{
   id: "Settings",
   icon: "⚙️"
 }];
-export default function App() {
+function App() {
   var _useState33 = useState(null),
     _useState34 = _slicedToArray(_useState33, 2),
     appData = _useState34[0],
@@ -4151,5 +4151,4 @@ export default function App() {
     }, t.icon), t.id);
   }))));
 }
-var root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(React.createElement(App));
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
