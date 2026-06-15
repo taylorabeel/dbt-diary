@@ -1,24 +1,1876 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="DBT Diary" />
-  <title>DBT Diary Card</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%;background:#f5f2ee;-webkit-tap-highlight-color:transparent}
-    input[type=range]{width:100%;cursor:pointer}
-    select,input,textarea,button{font-family:inherit}
-    textarea{resize:vertical}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#ede8df" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="DBT Diary" />
+<title>DBT Diary Card</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<style>html,body{margin:0;padding:0;background:#ede8df;-webkit-text-size-adjust:100%;}#loading{display:flex;align-items:center;justify-content:center;height:100vh;color:#9e8e7e;font-family:sans-serif;font-size:14px;}</style>
 </head>
 <body>
-  <div id="root"></div>
-  <script src="app.js"></script>
+<div id="root"><div id="loading">Loading DBT Diary…</div></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_FULL = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+const ALL_EMOTIONS = [
+  "Alienated", "Ambivalent", "Anger", "Annoyed", "Anxious", "Apathetic", "Apprehensive", "At Ease",
+  "Balanced", "Blessed", "Blissful", "Bored", "Calm", "Carefree", "Cheerful", "Chill", "Comfortable",
+  "Complacent", "Concerned", "Content", "Contempt", "Cozy", "Depressed", "Desolate", "Despairing",
+  "Despondent", "Disappointed", "Discouraged", "Disgusted", "Disheartened", "Down", "Drained",
+  "Easygoing", "Ecstatic", "Elated", "Energized", "Enraged", "Enthusiastic", "Excited", "Exhausted",
+  "Exhilarated", "Fatigued", "Fear", "Festive", "Focused", "Frightened", "Frustrated", "Fulfilled",
+  "Fuming", "Furious", "Glum", "Grateful", "Happy", "Hopeful", "Hopeless", "Hyper", "Inspired",
+  "Irritated", "Jittery", "Joy", "Lively", "Livid", "Lonely", "Loving", "Mellow", "Miserable",
+  "Morose", "Motivated", "Nervous", "Numb", "Optimistic", "Overwhelmed", "Pain", "Panicked",
+  "Peaceful", "Peeved", "Pessimistic", "Playful", "Pleasant", "Pleased", "Pride", "Relaxed",
+  "Repulsed", "Restful", "Restless", "Sad", "Satisfied", "Secure", "Serene", "Shame", "Shocked",
+  "Sleepy", "Spent", "Stressed", "Stunned", "Sullen", "Surprised", "Tense", "Thoughtful",
+  "Thrilled", "Tired", "Touched", "Tranquil", "Troubled", "Uneasy", "Upbeat", "Worried"
+];
+
+const MOOD_METER = {
+  red:    { label: "High Energy",  sublabel: "Unpleasant", color: "#c0513a", bg: "#f5e8e6",
+    emotions: ["Anger","Annoyed","Anxious","Apprehensive","Concerned","Contempt","Enraged","Fear","Frightened","Frustrated","Fuming","Furious","Irritated","Jittery","Livid","Nervous","Overwhelmed","Pain","Panicked","Peeved","Repulsed","Restless","Shame","Shocked","Stressed","Stunned","Tense","Troubled","Uneasy","Worried"] },
+  yellow: { label: "High Energy",  sublabel: "Pleasant",   color: "#b8922a", bg: "#faf3e0",
+    emotions: ["Blissful","Cheerful","Ecstatic","Elated","Energized","Enthusiastic","Excited","Exhilarated","Festive","Focused","Happy","Hopeful","Hyper","Inspired","Joy","Lively","Motivated","Optimistic","Playful","Pleasant","Pleased","Pride","Surprised","Thrilled","Upbeat"] },
+  blue:   { label: "Low Energy",   sublabel: "Unpleasant", color: "#4a7aaa", bg: "#e8eef5",
+    emotions: ["Alienated","Ambivalent","Apathetic","Bored","Depressed","Desolate","Despairing","Despondent","Disappointed","Discouraged","Disgusted","Disheartened","Down","Drained","Exhausted","Fatigued","Glum","Hopeless","Lonely","Miserable","Morose","Numb","Pessimistic","Sad","Spent","Sullen","Tired"] },
+  green:  { label: "Low Energy",   sublabel: "Pleasant",   color: "#4a8a5e", bg: "#e6f0eb",
+    emotions: ["At Ease","Balanced","Blessed","Calm","Carefree","Chill","Comfortable","Complacent","Content","Cozy","Easygoing","Fulfilled","Grateful","Loving","Mellow","Peaceful","Relaxed","Restful","Satisfied","Secure","Serene","Sleepy","Thoughtful","Touched","Tranquil"] },
+};
+
+const EMOTION_TO_QUADRANT = (() => {
+  const m = {};
+  for (const [key, q] of Object.entries(MOOD_METER)) { for (const em of q.emotions) m[em] = key; }
+  return m;
+})();
+
+const POSITIVE_QUADRANTS = ["yellow", "green"];
+
+function quadrantOf(emotion, customMap) { return EMOTION_TO_QUADRANT[emotion] || (customMap && customMap[emotion]) || null; }
+function quadrantColor(emotion, customMap) { const q = quadrantOf(emotion, customMap); return q ? MOOD_METER[q].color : "#9e8e7e"; }
+
+const DEFAULT_EMOTIONS = ["Anxious", "Anger", "Sad", "Hopeful", "Grateful"];
+
+const SKILLS_SCALE = [
+  "0 — Not thought about",
+  "1 — Thought, didn't use (didn't want to)",
+  "2 — Thought, didn't use (wanted to)",
+  "3 — Tried, couldn't do it",
+  "4 — Used, didn't help",
+  "5 — Used, helped",
+  "6 — Used automatically, didn't help",
+  "7 — Used automatically, helped",
+];
+
+const ALL_SKILLS_LIST = [
+  "Wise Mind", "Observe", "Describe", "Participate", "One Mindfully", "Non-judgmentally", "Effectively",
+  "DEAR MAN", "GIVE", "FAST", "Prioritize Your Goals", "Saying No / Limits",
+  "Physical Illness (PLEASE)", "Balanced Eating (PLEASE)", "Avoid Substances (PLEASE)",
+  "Balanced Sleep (PLEASE)", "Exercise (PLEASE)", "Build Mastery (PLEASE)",
+  "Opposite Action", "Emotion as a Wave", "Check the Facts", "Increase Positive Events",
+  "Activities (ACCEPTS)", "Contribution (ACCEPTS)", "Comparison (ACCEPTS)",
+  "Opposite Emotions (ACCEPTS)", "Pushing Away (ACCEPTS)", "Thoughts (ACCEPTS)", "Self-Soothe (ACCEPTS)",
+  "Temperature (TIPP)", "Intense Exercise (TIPP)", "Paced Breathing (TIPP)", "Paired Muscle Relaxation (TIPP)",
+  "Imagery (IMPROVE)", "Meaning (IMPROVE)", "Prayer (IMPROVE)", "Relaxation (IMPROVE)",
+  "One Thing Now (IMPROVE)", "Vacation (IMPROVE)", "Encouragement (IMPROVE)",
+  "Pros & Cons", "Radical Acceptance", "Willingness", "Half-Smile", "Observe the Breath",
+];
+
+const DEFAULT_JOURNAL_SKILLS = [
+  "Wise Mind", "Opposite Action", "Check the Facts", "Paced Breathing (TIPP)",
+  "Self-Soothe (ACCEPTS)", "Radical Acceptance", "Emotion as a Wave", "Half-Smile",
+];
+
+const ONSET_OPTIONS = ["Gradual", "Spike"];
+const DURATION_OPTIONS = ["A few min", "~20 min", "~1 hour", "A few hours", "Most of the day"];
+const AFTER_TYPES = ["Thought", "Action", "Skill", "Meditation", "Distraction", "Rode it out", "Other"];
+
+const DEFAULT_TIME_CATEGORIES = [
+  { name: "Work / Shoots", color: "#b08a6e" },
+  { name: "Family", color: "#c8a84b" },
+  { name: "Connection", color: "#7a9e87" },
+  { name: "Outdoor / Vitality", color: "#4a8a5e" },
+  { name: "Admin / Drains", color: "#c0513a" },
+  { name: "Rest", color: "#8a7eb0" },
+  { name: "Sleep", color: "#4a7aaa" },
+];
+
+const SKILLS_REFERENCE = [
+  {
+    module: "🧘 Core Mindfulness", color: "#7a9e87",
+    skills: [
+      { category: "Wise Mind", name: "Wise Mind", desc: "Access the center between emotion mind and logical mind. Pause, breathe, and ask: what does my deepest self know is true? Trust quiet inner knowing." },
+      { category: "WHAT", name: "Observe", desc: "Just notice your experience without reacting. Watch your thoughts like clouds passing — don't grab them or push them away. Try urge surfing — notice an urge without acting on it." },
+      { category: "WHAT", name: "Describe", desc: "Put words on what you notice. Label facts and feelings without judging. E.g., I notice tension in my chest instead of I'm falling apart." },
+      { category: "WHAT", name: "Participate", desc: "Throw yourself fully into the moment. Stop watching yourself and just do. Lose self-consciousness — like dancing without checking the mirror." },
+      { category: "HOW", name: "One Mindfully", desc: "Do one thing at a time. Focus your whole attention on the current activity. When your mind wanders, gently bring it back." },
+      { category: "HOW", name: "Non-judgmentally", desc: "Stick to the facts. Notice when you're judging and say just the facts instead. Don't judge your judging — just notice and re-focus." },
+      { category: "HOW", name: "Effectively", desc: "Do what works, not what's right. Focus on your goals, not winning the argument. Ask: Is what I'm doing helping me get where I want to go?" },
+    ]
+  },
+  {
+    module: "🤝 Interpersonal Effectiveness", color: "#b08a6e",
+    skills: [
+      { category: "Objectives", name: "DEAR MAN", desc: "Describe the situation. Express how you feel. Assert what you want. Reinforce the other person. Mindfully stay focused. Appear confident. Negotiate." },
+      { category: "Relationship", name: "GIVE", desc: "Be Gentle (no attacks). Stay Interested (listen). Validate (acknowledge their view). Use an Easy manner (be light, not rigid)." },
+      { category: "Self-Respect", name: "FAST", desc: "Be Fair to yourself and others. No apologies when not warranted. Stick to your values. Be Truthful — don't lie, exaggerate, or act helpless." },
+      { category: "Intensity", name: "Prioritize Your Goals", desc: "Before a hard conversation, ask: Am I going for (1) my objective, (2) the relationship, or (3) self-respect? Let that decide your approach." },
+      { category: "Intensity", name: "Saying No / Limits", desc: "It's okay to say no. Validate the other person's request, then firmly decline. Limits protect relationships — yours and theirs." },
+    ]
+  },
+  {
+    module: "💛 Emotion Regulation", color: "#c8a84b",
+    skills: [
+      { category: "PLEASE", name: "Physical Illness", desc: "Treat illness promptly. A body in pain can't regulate emotions well." },
+      { category: "PLEASE", name: "Balanced Eating", desc: "Don't go too long without eating. Avoid too much sugar or caffeine. Notice how food affects your mood." },
+      { category: "PLEASE", name: "Avoid Substances", desc: "Alcohol and mood-altering drugs interfere with emotional balance. When stressed, use a skill instead." },
+      { category: "PLEASE", name: "Balanced Sleep", desc: "Consistent sleep — same time to bed, same wake time — regulates emotions dramatically. Protect your sleep." },
+      { category: "PLEASE", name: "Exercise", desc: "Even 10 minutes of movement can shift your emotional state. Build it into your day like a medication." },
+      { category: "PLEASE", name: "Build Mastery", desc: "Do one thing each day that gives you a sense of accomplishment. Small wins build confidence." },
+      { category: "Regulation", name: "Opposite Action", desc: "Fear → approach it gently. Guilt → apologize or let it go. Sadness → get active. Anger → avoid, be gentle and empathetic." },
+      { category: "Regulation", name: "Emotion as a Wave", desc: "Don't amplify or suppress — just ride it. Let the emotion come and go like a wave. Observe without judgment." },
+      { category: "Regulation", name: "Check the Facts", desc: "Ask: Does my emotion fit the facts of the situation? Is my interpretation accurate?" },
+      { category: "Regulation", name: "Increase Positive Events", desc: "Actively build positive experiences. Short-term: do something pleasant today. Long-term: work toward goals that matter." },
+    ]
+  },
+  {
+    module: "🛡️ Distress Tolerance", color: "#8a7eb0",
+    skills: [
+      { category: "ACCEPTS", name: "Activities", desc: "Distract with activities that absorb your attention. Exercise, hobbies, games, cleaning — anything engaging." },
+      { category: "ACCEPTS", name: "Contribution", desc: "Help someone else. Shift focus off yourself. Even a small act of kindness changes your emotional state." },
+      { category: "ACCEPTS", name: "Comparison", desc: "Compare to a time you felt worse and survived, or to others facing greater difficulty." },
+      { category: "ACCEPTS", name: "Opposite Emotions", desc: "Do something that creates a different emotion — funny video, upbeat music, an action movie." },
+      { category: "ACCEPTS", name: "Pushing Away", desc: "Mentally leave the situation for now. Refuse to think about it until you're in a calmer state." },
+      { category: "ACCEPTS", name: "Thoughts", desc: "Replace the distressing thought with a different one. Count, name objects, focus on something neutral." },
+      { category: "ACCEPTS", name: "Self-Soothe", desc: "Use your 5 senses: something to see (beauty), hear (music), smell (candle), taste (tea), touch (soft blanket)." },
+      { category: "TIPP", name: "Temperature", desc: "Splash cold water on your face or hold ice. Cold triggers the dive reflex — your heart rate slows within seconds." },
+      { category: "TIPP", name: "Intense Exercise", desc: "Burn off the emotion physically. Sprint, do jumping jacks, push-ups — even 20-30 seconds can break the flood." },
+      { category: "TIPP", name: "Paced Breathing", desc: "Slow your exhale longer than your inhale. Inhale 4 counts, exhale 6-8 counts. Activates your calm-down system." },
+      { category: "TIPP", name: "Paired Muscle Relaxation", desc: "Tense a muscle group hard for 5 seconds, then release. Work through your body from feet to face." },
+      { category: "IMPROVE", name: "Imagery", desc: "Imagine a safe, calming place. Visualize a positive outcome. Picture yourself coping well." },
+      { category: "IMPROVE", name: "Meaning", desc: "Find or create meaning in the moment. Ask: what can I learn? How might this serve me later?" },
+      { category: "IMPROVE", name: "Prayer", desc: "Connect to something larger than yourself — God, nature, humanity. Ask for strength to bear what is." },
+      { category: "IMPROVE", name: "Relaxation", desc: "Deep breathing, progressive muscle relaxation, yoga, massage. Let your body tell your mind it's okay." },
+      { category: "IMPROVE", name: "One Thing Now", desc: "Bring your full attention to just this moment. What is happening right now? Not the past or future." },
+      { category: "IMPROVE", name: "Vacation", desc: "Give yourself a brief mental or physical break — a walk, a nap, a show. Brief escapes are healthy coping." },
+      { category: "IMPROVE", name: "Encouragement", desc: "Talk kindly to yourself: This is hard and I can do hard things. Cheerlead yourself through." },
+      { category: "Crisis", name: "Pros & Cons", desc: "Write out pros and cons of tolerating vs. acting on the crisis urge. Use it before acting impulsively." },
+      { category: "Acceptance", name: "Radical Acceptance", desc: "Fully accept reality as it is — not approval, just acknowledgment. Fighting what is only adds suffering." },
+      { category: "Acceptance", name: "Willingness", desc: "Say yes to the moment. Replace I won't with I will do what is needed right now." },
+      { category: "Acceptance", name: "Half-Smile", desc: "Gently turn the corners of your mouth up — not fake happiness, but a soft acceptance. Let your face lead." },
+      { category: "Acceptance", name: "Observe the Breath", desc: "Notice each inhale and exhale. Count breaths 1-10 and repeat. Anchor yourself in the body." },
+    ]
+  }
+];
+
+const STORAGE_KEY = "dbt-diary-v2";
+
+async function ensureJsPdf() {
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    if (document.querySelector(`script[data-src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = src; s.dataset.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Failed to load " + src));
+    document.head.appendChild(s);
+  });
+  if (!window.jspdf || !window.jspdf.jsPDF) {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  }
+  const test = new window.jspdf.jsPDF();
+  if (typeof test.autoTable !== "function") {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+  }
+}
+
+function activeDayIndexes(week) {
+  return DAYS.map((day, i) => {
+    const d = week.days[day] || {};
+    const has = (d.journal && d.journal.trim()) ||
+      Number(d.targetUrge) > 0 || d.targetDid || d.meditation || d.sleepHours || d.skills !== "" ||
+      (d.emotionArcs && d.emotionArcs.length) || (d.timeBlocks && d.timeBlocks.length) ||
+      d.journalEmotion || (d.emotions && Object.values(d.emotions).some(v => Number(v) > 0));
+    return has ? i : -1;
+  }).filter(i => i >= 0);
+}
+
+function completedRange(week) {
+  const idxs = activeDayIndexes(week);
+  const start = parseLocalDate(week.weekStart);
+  if (idxs.length === 0) {
+    const end = parseLocalDate(week.weekStart); end.setDate(end.getDate() + 6);
+    return { startIdx: 0, endIdx: 6, startDate: start, endDate: end, empty: true };
+  }
+  const sIdx = idxs[0], eIdx = idxs[idxs.length - 1];
+  const sDate = parseLocalDate(week.weekStart); sDate.setDate(sDate.getDate() + sIdx);
+  const eDate = parseLocalDate(week.weekStart); eDate.setDate(eDate.getDate() + eIdx);
+  return { startIdx: sIdx, endIdx: eIdx, startDate: sDate, endDate: eDate, empty: false };
+}
+
+async function generateDiaryPdf(week, emotions, customMap) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageMaxY = doc.internal.pageSize.getHeight() - 50;
+  const margin = 50;
+  let y = 45;
+
+  const range = completedRange(week);
+  const fmt = d => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const rangeLabel = range.empty
+    ? `${fmt(range.startDate)} – ${fmt(range.endDate)}`
+    : (range.startIdx === range.endIdx ? fmt(range.startDate) : `${fmt(range.startDate)} – ${fmt(range.endDate)}`);
+
+  const ensureSpace = (need) => { if (y + need > pageMaxY) { doc.addPage(); y = 45; } };
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(26, 26, 26);
+  doc.text("DBT Weekly Diary Card", margin, y); y += 16;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(85, 85, 85);
+  doc.text(`Taylor Abeel  |  ${rangeLabel}${range.empty ? "" : "  (entries logged)"}`, margin, y); y += 18;
+
+  if (week.targetBehavior && week.targetBehavior.trim()) {
+    const txt = `Target Behavior:  ${week.targetBehavior.trim()}`;
+    const maxW = pageWidth - 2 * margin - 20;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    const lines = doc.splitTextToSize(txt, maxW);
+    const boxH = Math.max(28, 14 + lines.length * 13);
+    doc.setFillColor(243, 241, 236); doc.setDrawColor(207, 201, 189); doc.setLineWidth(0.5);
+    doc.roundedRect(margin, y, pageWidth - 2 * margin, boxH, 2, 2, "FD");
+    doc.setTextColor(26, 26, 26);
+    let ty = y + 17;
+    lines.forEach((line, i) => { doc.text(line, margin + 10, ty + i * 13); });
+    y += boxH + 8;
+  }
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(26, 26, 26);
+  doc.text("Daily Summary", margin, y); y += 8;
+
+  const rows = DAYS.map((day, i) => {
+    const d = week.days[day] || {};
+    const urge = (d.targetUrge !== undefined && d.targetUrge !== "") ? String(d.targetUrge) : "0";
+    const acted = d.targetDid || "—";
+    const meditate = d.meditation || "—";
+    const sleep = d.sleepHours ? `${d.sleepHours}h${d.sleepQuality ? ` (${d.sleepQuality})` : ""}` : "—";
+    const skills = (d.skills !== "" && d.skills !== undefined && d.skills !== null) ? `${d.skills}/7` : "—";
+    const emParts = emotions.map((em) => {
+      const val = d.emotions ? d.emotions[em] : 0;
+      return (val && Number(val) > 0) ? `${em} ${val}` : null;
+    }).filter(Boolean);
+    const emStr = emParts.length > 0 ? emParts.join("  ·  ") : "none noted";
+    return [DAYS[i], urge, acted, meditate, sleep, skills, emStr];
+  });
+
+  doc.autoTable({
+    startY: y,
+    head: [["Day", "Urge", "Acted", "Meditate", "Sleep", "Skills", "Emotions (snapshot 1–5)"]],
+    body: rows,
+    styles: { font: "helvetica", fontSize: 9.5, cellPadding: 5, lineColor: [217, 212, 199], lineWidth: 0.4, textColor: [34, 34, 34], valign: "middle" },
+    headStyles: { fillColor: [58, 58, 58], textColor: 255, fontStyle: "bold", halign: "center", cellPadding: 6 },
+    alternateRowStyles: { fillColor: [247, 246, 243] },
+    columnStyles: { 0: { cellWidth: 42 }, 1: { cellWidth: 38, halign: "center" }, 2: { cellWidth: 42, halign: "center" }, 3: { cellWidth: 55, halign: "center" }, 4: { cellWidth: 75 }, 5: { cellWidth: 42, halign: "center" }, 6: { cellWidth: "auto" } },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 6;
+
+  doc.setFont("helvetica", "italic"); doc.setFontSize(8.5); doc.setTextColor(102, 102, 102);
+  doc.text("Urge: 0 = none, 5 = strongest.  Acted: Y / N / — (n/a).  Skills: count of DBT skills used out of 7 tracked.", margin, y);
+  y += 20;
+
+  const arcDays = DAYS.map((day, i) => ({ i, day, arcs: (week.days[day]?.emotionArcs) || [] })).filter(o => o.arcs.length);
+  if (arcDays.length) {
+    ensureSpace(40);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(26, 26, 26);
+    doc.text("Emotion Arcs", margin, y); y += 6;
+    doc.setFont("helvetica", "italic"); doc.setFontSize(8.5); doc.setTextColor(102, 102, 102);
+    doc.text("Before -> intensity (start->peak->end) -> what shifted it. At least one positive emotion where logged.", margin, y);
+    y += 12;
+    const arcRows = [];
+    arcDays.forEach(({ i, arcs }) => {
+      arcs.forEach(a => {
+        const intensity = `${a.start || "—"}->${a.peak || "—"}->${a.end || "—"}`;
+        const after = [a.afterType, a.afterDetail].filter(Boolean).join(": ");
+        arcRows.push([DAYS[i], a.emotion || "—", a.before || "—", (a.onset || "—") + " · " + intensity, a.duration || "—", after || "—"]);
+      });
+    });
+    doc.autoTable({
+      startY: y,
+      head: [["Day", "Emotion", "Before (trigger)", "Onset · Intensity", "Lasted", "After (what shifted it)"]],
+      body: arcRows,
+      styles: { font: "helvetica", fontSize: 9, cellPadding: 5, lineColor: [217, 212, 199], lineWidth: 0.4, textColor: [34, 34, 34], valign: "top" },
+      headStyles: { fillColor: [122, 110, 92], textColor: 255, fontStyle: "bold", halign: "left", cellPadding: 6 },
+      alternateRowStyles: { fillColor: [247, 246, 243] },
+      columnStyles: { 0: { cellWidth: 38 }, 1: { cellWidth: 62 }, 2: { cellWidth: "auto" }, 3: { cellWidth: 92 }, 4: { cellWidth: 58 }, 5: { cellWidth: "auto" } },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 16;
+  }
+
+  const catTotals = {};
+  let totalBlockHours = 0;
+  DAYS.forEach(day => {
+    (week.days[day]?.timeBlocks || []).forEach(b => {
+      const h = blockHours(b);
+      if (h <= 0) return;
+      if (!catTotals[b.category]) catTotals[b.category] = { hours: 0, valSum: 0, valCount: 0 };
+      catTotals[b.category].hours += h;
+      if (b.valence !== "" && b.valence !== undefined && b.valence !== null) { catTotals[b.category].valSum += Number(b.valence); catTotals[b.category].valCount++; }
+      totalBlockHours += h;
+    });
+  });
+  if (totalBlockHours > 0) {
+    ensureSpace(40);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(26, 26, 26);
+    doc.text("Time & Margin", margin, y); y += 6;
+    doc.setFont("helvetica", "italic"); doc.setFontSize(8.5); doc.setTextColor(102, 102, 102);
+    doc.text("Hours by category across the week, with average drained(-2) to restored(+2) rating.", margin, y);
+    y += 12;
+    const tRows = Object.entries(catTotals).sort((a, b) => b[1].hours - a[1].hours).map(([cat, v]) => {
+      const pct = Math.round((v.hours / totalBlockHours) * 100);
+      const avg = v.valCount ? (v.valSum / v.valCount).toFixed(1) : "—";
+      return [cat, `${v.hours.toFixed(1)}h`, `${pct}%`, avg];
+    });
+    doc.autoTable({
+      startY: y,
+      head: [["Category", "Hours", "Share", "Avg drained<->restored"]],
+      body: tRows,
+      styles: { font: "helvetica", fontSize: 9.5, cellPadding: 5, lineColor: [217, 212, 199], lineWidth: 0.4, textColor: [34, 34, 34] },
+      headStyles: { fillColor: [58, 58, 58], textColor: 255, fontStyle: "bold", cellPadding: 6 },
+      alternateRowStyles: { fillColor: [247, 246, 243] },
+      columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 60, halign: "center" }, 2: { cellWidth: 55, halign: "center" }, 3: { cellWidth: 130, halign: "center" } },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 16;
+  }
+
+  const sp = week.skillsProgress || {};
+  const ratedMods = SKILLS_PROGRESS_MODULES.filter(m => (sp[m.key] || {}).capacity || (sp[m.key] || {}).confidence);
+  if (ratedMods.length || sp.mostConfident || sp.wantToGrow) {
+    ensureSpace(40);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(26, 26, 26);
+    doc.text("Skills Progress", margin, y); y += 8;
+    const spRows = SKILLS_PROGRESS_MODULES.map(mod => {
+      const vals = sp[mod.key] || {};
+      return [mod.label, (vals.capacity || "—") + "/5", (vals.confidence || "—") + "/5"];
+    });
+    doc.autoTable({
+      startY: y,
+      head: [["Module", "Capacity", "Confidence"]],
+      body: spRows,
+      styles: { font: "helvetica", fontSize: 9.5, cellPadding: 5, lineColor: [217, 212, 199], lineWidth: 0.4, textColor: [34, 34, 34] },
+      headStyles: { fillColor: [138, 126, 176], textColor: 255, fontStyle: "bold", cellPadding: 6 },
+      alternateRowStyles: { fillColor: [247, 246, 243] },
+      columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 80, halign: "center" }, 2: { cellWidth: 80, halign: "center" } },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 6;
+    if (sp.mostConfident || sp.wantToGrow) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(85, 85, 85);
+      if (sp.mostConfident) { doc.text("Most confident: " + sp.mostConfident, margin, y); y += 12; }
+      if (sp.wantToGrow) { doc.text("Want to grow: " + sp.wantToGrow, margin, y); y += 12; }
+    }
+    y += 8;
+  }
+
+  ensureSpace(30);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(26, 26, 26);
+  doc.text("Daily Notes", margin, y); y += 14;
+  const contentWidth = pageWidth - 2 * margin;
+  DAYS.forEach((day, i) => {
+    const d = week.days[day] || {};
+    if (!d.journal || !d.journal.trim()) return;
+    const lines = doc.splitTextToSize(d.journal.trim(), contentWidth);
+    ensureSpace(14 + lines.length * 13 + 8);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(26, 26, 26);
+    doc.text(DAY_FULL[i], margin, y); y += 13;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(34, 34, 34);
+    lines.forEach((line) => { if (y > pageMaxY) { doc.addPage(); y = 45; } doc.text(line, margin, y); y += 13; });
+    y += 6;
+  });
+
+  ensureSpace(20); y += 8;
+  doc.setFont("helvetica", "italic"); doc.setFontSize(8.5); doc.setTextColor(136, 136, 136);
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  doc.text(`Generated ${today}  ·  DBT Diary Card`, margin, y);
+
+  const filename = `DBT_Diary_${localDateStr(range.startDate)}_to_${localDateStr(range.endDate)}.pdf`;
+  const blob = doc.output("blob");
+  const file = new File([blob], filename, { type: "application/pdf" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "DBT Diary Card" }); return; }
+    catch (e) { if (e.name === "AbortError") return; }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const emptyDay = (defaultEmotions = []) => ({
+  targetUrge: "0", targetDid: "", meditation: "",
+  emotions: Object.fromEntries(defaultEmotions.map(em => [em, "0"])),
+  sleepHours: "", sleepQuality: "", skills: "",
+  journal: "",
+  emotionArcs: [],
+  timeBlocks: [],
+  journalEmotion: "", journalRating: "", skillUsed: "", afterRating: "",
+});
+
+function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+function localDateStr(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+function parseLocalDate(s) { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); }
+
+function getThisWeekStart() {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(now);
+  mon.setDate(now.getDate() + diff);
+  return localDateStr(mon);
+}
+
+function hmToHours(hm) {
+  if (!hm || typeof hm !== "string" || !hm.includes(":")) return null;
+  const [h, m] = hm.split(":").map(Number);
+  if (Number.isNaN(h)) return null;
+  return h + (Number.isNaN(m) ? 0 : m) / 60;
+}
+function blockHours(b) {
+  const s = hmToHours(b.start), e = hmToHours(b.end);
+  if (s === null || e === null) return 0;
+  let dur = e - s;
+  if (dur < 0) dur += 24;
+  return dur;
+}
+
+const emptySkillsProgress = () => ({
+  mindfulness: { capacity: "", confidence: "" },
+  interpersonal: { capacity: "", confidence: "" },
+  emotionReg: { capacity: "", confidence: "" },
+  distressTol: { capacity: "", confidence: "" },
+  mostConfident: "",
+  wantToGrow: "",
+});
+
+const emptyWeek = (emotions = DEFAULT_EMOTIONS, targetBehavior = "") => ({
+  weekStart: getThisWeekStart(), targetBehavior, trackedEmotions: emotions,
+  customEmotionQuadrants: {},
+  days: Object.fromEntries(DAYS.map(d => [d, emptyDay(emotions)])),
+  skillsProgress: emptySkillsProgress(),
+});
+
+const JSONBIN_BIN_ID = "6a2de372f5f4af5e29edc234";
+const JSONBIN_ACCESS_KEY = "$2a$10$j4trgFr3g7rAYDysHj67zefyv0H2A7gG.08n82DQViHqdUilXZd0u";
+
+async function loadData() {
+  try {
+    const res = await fetch("https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID + "/latest", { headers: { "X-Access-Key": JSONBIN_ACCESS_KEY } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json && json.record && json.record.weeks) ? json.record : null;
+  } catch { return null; }
+}
+async function saveData(data) {
+  try {
+    await fetch("https://api.jsonbin.io/v3/b/" + JSONBIN_BIN_ID, { method: "PUT", headers: { "Content-Type": "application/json", "X-Access-Key": JSONBIN_ACCESS_KEY }, body: JSON.stringify(data) });
+  } catch {}
+}
+
+let __id = 0;
+function uid() { __id += 1; return Date.now().toString(36) + "-" + __id; }
+
+function SliderInput({ value, max = 5, min = 0, onChange, label, accent }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      {label && <span style={{ fontSize: 11, color: "var(--muted)", letterSpacing: "0.07em", textTransform: "uppercase" }}>{label}</span>}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <input type="range" min={min} max={max} step={1} value={value === "" ? min : Number(value)}
+          onChange={e => onChange(e.target.value)} style={{ flex: 1, accentColor: accent || "var(--accent)" }} />
+        <span style={{ minWidth: 26, textAlign: "center", fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: accent || "var(--accent)" }}>
+          {value === "" ? min : value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MultiToggle({ value, options, onChange, accent }) {
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {options.map(opt => (
+        <button key={opt} onClick={() => onChange(value === opt ? "" : opt)} style={{
+          padding: "5px 14px", borderRadius: 20,
+          border: `1.5px solid ${value === opt ? (accent || "var(--accent)") : "var(--border)"}`,
+          background: value === opt ? (accent || "var(--accent)") : "transparent",
+          color: value === opt ? "#fff" : "var(--muted)",
+          fontWeight: 600, fontSize: 13, cursor: "pointer", transition: "all 0.15s", fontFamily: "var(--body)"
+        }}>{opt}</button>
+      ))}
+    </div>
+  );
+}
+
+function Card({ children, style = {} }) {
+  return <div style={{ background: "var(--card)", borderRadius: 16, padding: "18px 16px", border: "1px solid var(--border)", ...style }}>{children}</div>;
+}
+
+function SectionLabel({ children, color }) {
+  return <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: color || "var(--accent)", display: "block", marginBottom: 12 }}>{children}</span>;
+}
+
+function Segmented({ options, value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 4, background: "var(--surface)", padding: 4, borderRadius: 10, marginBottom: 16 }}>
+      {options.map(opt => (
+        <button key={opt} onClick={() => onChange(opt)} style={{
+          flex: 1, padding: "9px 4px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none",
+          background: value === opt ? "var(--card)" : "transparent",
+          color: value === opt ? "var(--fg)" : "var(--muted)",
+          boxShadow: value === opt ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+          cursor: "pointer", fontFamily: "var(--body)"
+        }}>{opt}</button>
+      ))}
+    </div>
+  );
+}
+
+function ArcMini({ arc, color, width = 120, height = 44 }) {
+  const pts = [arc.start, arc.peak, arc.end].map(v => Number(v) || 0);
+  if (pts.every(v => v === 0)) {
+    return <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>Set start · peak · end to see the arc</div>;
+  }
+  const pad = 6;
+  const xs = [pad, width / 2, width - pad];
+  const ys = pts.map(v => height - pad - (v / 5) * (height - 2 * pad));
+  const poly = xs.map((x, i) => `${x},${ys[i]}`).join(" ");
+  return (
+    <svg width={width} height={height} style={{ overflow: "visible" }}>
+      <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="var(--border)" strokeWidth="1" />
+      <polyline points={poly} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {xs.map((x, i) => <circle key={i} cx={x} cy={ys[i]} r="3.5" fill={color} />)}
+      {["S", "P", "E"].map((lbl, i) => <text key={i} x={xs[i]} y={height + 2} textAnchor="middle" fontSize="8" fill="#9e8e7e">{lbl}{pts[i] ? " " + pts[i] : ""}</text>)}
+    </svg>
+  );
+}
+
+function DayArcWave({ arcs, customMap, height = 130 }) {
+  const valid = arcs.filter(a => Number(a.peak) > 0 || Number(a.start) > 0 || Number(a.end) > 0);
+  if (!valid.length) return null;
+  const width = 340, padX = 20, padY = 16;
+  const slot = (width - 2 * padX) / valid.length;
+  const yFor = v => height - padY - ((Number(v) || 0) / 5) * (height - 2 * padY);
+  return (
+    <svg width="100%" viewBox={`0 0 ${width} ${height + 16}`} style={{ overflow: "visible" }}>
+      {[0, 1, 2, 3, 4, 5].map(g => {
+        const yy = yFor(g);
+        return <g key={g}><line x1={padX} y1={yy} x2={width - padX} y2={yy} stroke="var(--border)" strokeWidth="0.5" opacity="0.6" /><text x={padX - 4} y={yy + 3} textAnchor="end" fontSize="7" fill="#9e8e7e">{g}</text></g>;
+      })}
+      {valid.map((a, i) => {
+        const color = quadrantColor(a.emotion, customMap);
+        const cx = padX + slot * i + slot / 2;
+        const x0 = cx - slot * 0.32, x1 = cx, x2 = cx + slot * 0.32;
+        const y0 = yFor(a.start), y1 = yFor(a.peak), y2 = yFor(a.end);
+        return (
+          <g key={i}>
+            <polyline points={`${x0},${y0} ${x1},${y1} ${x2},${y2}`} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx={x0} cy={y0} r="3" fill={color} opacity="0.65" />
+            <circle cx={x1} cy={y1} r="3.5" fill={color} />
+            <circle cx={x2} cy={y2} r="3" fill={color} opacity="0.65" />
+            <text x={cx} y={height + 6} textAnchor="middle" fontSize="8" fill={color} fontWeight="600">{a.emotion ? a.emotion.slice(0, 8) : "—"}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function EmotionArcs({ arcs, customMap, journalSkills, onChange }) {
+  const update = (id, patch) => onChange(arcs.map(a => a.id === id ? { ...a, ...patch } : a));
+  const remove = (id) => onChange(arcs.filter(a => a.id !== id));
+  const add = () => onChange([...arcs, { id: uid(), emotion: "", before: "", onset: "", start: "", peak: "", end: "", duration: "", afterType: "", afterDetail: "" }]);
+  const hasPositive = arcs.some(a => POSITIVE_QUADRANTS.includes(quadrantOf(a.emotion, customMap)));
+  const skillList = (journalSkills && journalSkills.length) ? journalSkills : DEFAULT_JOURNAL_SKILLS;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ background: "var(--surface)", borderRadius: 8, padding: "9px 11px", fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>
+        Pick the <strong style={{ color: "var(--fg-soft)" }}>2–3 emotions that mattered most</strong> today. For each, capture the arc: what set it off, how it rose, how strong (start→peak→end), how long, and what shifted it.
+      </div>
+
+      {arcs.length > 0 && (
+        <div style={{ background: "var(--card)", borderRadius: 12, padding: "12px 10px 4px", border: "1px solid var(--border)" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--accent)", display: "block", marginBottom: 4 }}>Today's emotional arcs</span>
+          <DayArcWave arcs={arcs} customMap={customMap} />
+        </div>
+      )}
+
+      {arcs.map((a, idx) => {
+        const color = quadrantColor(a.emotion, customMap);
+        const isPositive = POSITIVE_QUADRANTS.includes(quadrantOf(a.emotion, customMap));
+        return (
+          <Card key={a.id} style={{ borderColor: a.emotion ? color + "55" : "var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: color }}>
+                Arc {idx + 1}{isPositive ? " · positive ✓" : ""}
+              </span>
+              <button onClick={() => remove(a.id)} style={{ background: "transparent", border: "none", color: "var(--muted)", fontSize: 18, cursor: "pointer", padding: "2px 8px", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+              <div>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Emotion</span>
+                <select value={a.emotion} onChange={e => update(a.id, { emotion: e.target.value })}
+                  style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", color: a.emotion ? "var(--fg)" : "var(--muted)", fontSize: 14 }}>
+                  <option value="">Select an emotion…</option>
+                  {Object.entries(MOOD_METER).map(([key, q]) => (
+                    <optgroup key={key} label={`${q.label} · ${q.sublabel}`}>
+                      {q.emotions.map(em => <option key={em} value={em}>{em}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Before — what set it off?</span>
+                <input type="text" value={a.before} onChange={e => update(a.id, { before: e.target.value })} placeholder="e.g. client praised my work"
+                  style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "9px 11px", color: "var(--fg)", fontSize: 14, boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 7 }}>Onset — rise slowly or spike?</span>
+                <MultiToggle value={a.onset} options={ONSET_OPTIONS} onChange={v => update(a.id, { onset: v })} accent={color} />
+              </div>
+              <div style={{ background: "var(--surface)", borderRadius: 10, padding: "12px" }}>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 10 }}>Intensity (1–5): start → peak → end</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <SliderInput label="Start" value={a.start} max={5} min={1} accent={color} onChange={v => update(a.id, { start: v })} />
+                  <SliderInput label="Peak" value={a.peak} max={5} min={1} accent={color} onChange={v => update(a.id, { peak: v })} />
+                  <SliderInput label="End" value={a.end} max={5} min={1} accent={color} onChange={v => update(a.id, { end: v })} />
+                </div>
+                <div style={{ marginTop: 10, display: "flex", justifyContent: "center" }}>
+                  <ArcMini arc={a} color={color} />
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>How long did it last?</span>
+                <select value={a.duration} onChange={e => update(a.id, { duration: e.target.value })}
+                  style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", color: a.duration ? "var(--fg)" : "var(--muted)", fontSize: 14 }}>
+                  <option value="">Select…</option>
+                  {DURATION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 7 }}>
+                  After — what {isPositive ? "cut it short or changed it" : "brought it down, kept it up, or changed it"}?
+                </span>
+                <MultiToggle value={a.afterType} options={AFTER_TYPES} onChange={v => update(a.id, { afterType: v, afterDetail: "" })} accent={color} />
+                {a.afterType === "Skill" ? (
+                  <div style={{ marginTop: 8 }}>
+                    <select value={skillList.includes(a.afterDetail) || a.afterDetail === "__custom__" ? a.afterDetail : (a.afterDetail ? "__custom__" : "")}
+                      onChange={e => update(a.id, { afterDetail: e.target.value === "__custom__" ? " " : e.target.value })}
+                      style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", color: a.afterDetail ? "var(--fg)" : "var(--muted)", fontSize: 14 }}>
+                      <option value="">Which skill?</option>
+                      {skillList.map(s => <option key={s} value={s}>{s}</option>)}
+                      <option value="__custom__">✏️ Custom…</option>
+                    </select>
+                    {(a.afterDetail === "__custom__" || (a.afterDetail && a.afterDetail.trim() && !skillList.includes(a.afterDetail))) && (
+                      <input type="text" value={a.afterDetail === "__custom__" ? "" : a.afterDetail} onChange={e => update(a.id, { afterDetail: e.target.value })} placeholder="Name your skill"
+                        style={{ width: "100%", marginTop: 8, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "9px 11px", color: "var(--fg)", fontSize: 14, boxSizing: "border-box" }} />
+                    )}
+                  </div>
+                ) : a.afterType && a.afterType !== "Rode it out" ? (
+                  <input type="text" value={a.afterDetail} onChange={e => update(a.id, { afterDetail: e.target.value })}
+                    placeholder={a.afterType === "Thought" ? "e.g. yes, but I'm behind on everything" : "What was it?"}
+                    style={{ width: "100%", marginTop: 8, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "9px 11px", color: "var(--fg)", fontSize: 14, boxSizing: "border-box" }} />
+                ) : null}
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+
+      {arcs.length > 0 && !hasPositive && (
+        <div style={{ background: MOOD_METER.green.bg, borderRadius: 10, padding: "11px 13px", fontSize: 12, color: MOOD_METER.green.color, lineHeight: 1.5, border: "1px solid " + MOOD_METER.green.color + "40" }}>
+          Try logging one <strong>positive</strong> arc too (joy, pride, gratitude, peace). Watching the "after" on good moments is where the discounting shows up.
+        </div>
+      )}
+
+      <button onClick={add} style={{ padding: "12px", borderRadius: 10, background: "var(--surface)", border: "1.5px dashed var(--accent)", color: "var(--accent)", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "var(--body)" }}>+ Add an emotion arc</button>
+
+      {arcs.length === 0 && (
+        <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic", textAlign: "center" }}>
+          A few well-captured arcs each week tell more than a perfect grid. Missing some is fine.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DayTimeBar({ blocks, categories }) {
+  const valid = blocks.filter(b => blockHours(b) > 0 && hmToHours(b.start) !== null);
+  if (!valid.length) return null;
+  const colorFor = (name) => (categories.find(c => c.name === name) || {}).color || "#9e8e7e";
+  const width = 340, h = 26, padX = 6;
+  const span = width - 2 * padX;
+  const xFor = hr => padX + (hr / 24) * span;
+  return (
+    <svg width="100%" viewBox={`0 0 ${width} ${h + 14}`}>
+      <rect x={padX} y={2} width={span} height={h} rx={5} fill="var(--surface)" />
+      {valid.map((b, i) => {
+        const s = hmToHours(b.start);
+        const w = (blockHours(b) / 24) * span;
+        return <rect key={i} x={xFor(s)} y={2} width={Math.max(w, 1.5)} height={h} rx={2} fill={colorFor(b.category)} opacity="0.92" />;
+      })}
+      {[0, 6, 12, 18, 24].map(t => (
+        <g key={t}>
+          <line x1={xFor(t)} y1={2} x2={xFor(t)} y2={h + 2} stroke="var(--border)" strokeWidth="0.5" />
+          <text x={xFor(t)} y={h + 12} textAnchor="middle" fontSize="8" fill="#9e8e7e">{t === 0 || t === 24 ? "12a" : t === 12 ? "12p" : t > 12 ? (t - 12) + "p" : t + "a"}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+const VALENCE_LABELS = { "-2": "Draining", "-1": "Mild drain", "0": "Neutral", "1": "Mild restore", "2": "Restoring" };
+
+function TimeBlocks({ blocks, categories, onChange }) {
+  const cats = (categories && categories.length) ? categories : DEFAULT_TIME_CATEGORIES;
+  const update = (id, patch) => onChange(blocks.map(b => b.id === id ? { ...b, ...patch } : b));
+  const remove = (id) => onChange(blocks.filter(b => b.id !== id));
+  const add = () => {
+    const last = blocks[blocks.length - 1];
+    const start = last && last.end ? last.end : "08:00";
+    onChange([...blocks, { id: uid(), start, end: "", category: "", valence: "0" }]);
+  };
+
+  const totals = {};
+  let total = 0;
+  blocks.forEach(b => { const hh = blockHours(b); if (hh > 0 && b.category) { totals[b.category] = (totals[b.category] || 0) + hh; total += hh; } });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ background: "var(--surface)", borderRadius: 8, padding: "9px 11px", fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>
+        Rebuild your day as a few <strong style={{ color: "var(--fg-soft)" }}>blocks</strong> — start to end, what it was, and whether it drained or restored you. A diagnostic to find margin, not a forever habit.
+      </div>
+
+      {blocks.length > 0 && (
+        <div style={{ background: "var(--card)", borderRadius: 12, padding: "12px 10px 4px", border: "1px solid var(--border)" }}>
+          <DayTimeBar blocks={blocks} categories={cats} />
+          {total > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+              {Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([name, hrs]) => {
+                const col = (cats.find(c => c.name === name) || {}).color || "#9e8e7e";
+                return <span key={name} style={{ fontSize: 11, fontWeight: 600, color: col, display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: col, display: "inline-block" }} />{name} {hrs.toFixed(1)}h</span>;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {blocks.map((b, idx) => {
+        const col = (cats.find(c => c.name === b.category) || {}).color || "var(--accent)";
+        return (
+          <Card key={b.id} style={{ borderColor: b.category ? col + "55" : "var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: col }}>
+                Block {idx + 1}{blockHours(b) > 0 ? ` · ${blockHours(b).toFixed(1)}h` : ""}
+              </span>
+              <button onClick={() => remove(b.id)} style={{ background: "transparent", border: "none", color: "var(--muted)", fontSize: 18, cursor: "pointer", padding: "2px 8px", lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Start</span>
+                  <input type="time" value={b.start} onChange={e => update(b.id, { start: e.target.value })}
+                    style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "9px 10px", color: "var(--fg)", fontSize: 15, fontFamily: "var(--mono)", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>End</span>
+                  <input type="time" value={b.end} onChange={e => update(b.id, { end: e.target.value })}
+                    style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "9px 10px", color: "var(--fg)", fontSize: 15, fontFamily: "var(--mono)", boxSizing: "border-box" }} />
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 8 }}>What was it?</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {cats.map(c => {
+                    const on = b.category === c.name;
+                    return (
+                      <button key={c.name} onClick={() => update(b.id, { category: on ? "" : c.name })} style={{
+                        padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600,
+                        border: "1.5px solid " + (on ? c.color : c.color + "55"),
+                        background: on ? c.color : "#fff", color: on ? "#fff" : c.color,
+                        cursor: "pointer", fontFamily: "var(--body)"
+                      }}>{c.name}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 5 }}>
+                  Drained ↔ Restored — <span style={{ textTransform: "none", fontStyle: "italic", letterSpacing: 0, fontWeight: 400 }}>{VALENCE_LABELS[String(b.valence)] || "Neutral"}</span>
+                </span>
+                <input type="range" min={-2} max={2} step={1} value={b.valence === "" ? 0 : Number(b.valence)}
+                  onChange={e => update(b.id, { valence: e.target.value })} style={{ width: "100%", accentColor: col }} />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--muted)", marginTop: 2 }}>
+                  <span>Draining</span><span>Neutral</span><span>Restoring</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+
+      <button onClick={add} style={{ padding: "12px", borderRadius: 10, background: "var(--surface)", border: "1.5px dashed var(--accent)", color: "var(--accent)", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "var(--body)" }}>+ Add a time block</button>
+    </div>
+  );
+}
+
+function DayEntry({ dayFull, dayDate, data, targetBehavior, onChange, onFlush, customEmotionQuadrants, journalSkills, timeCategories, onAddCustomEmotion }) {
+  const set = (k, v) => onChange({ ...data, [k]: v });
+  const setEmotion = (k, v) => onChange({ ...data, emotions: { ...data.emotions, [k]: v } });
+  const removeEmotion = (k) => { const next = { ...data.emotions }; delete next[k]; onChange({ ...data, emotions: next }); };
+  const addEmotion = (k) => { if (data.emotions[k] !== undefined) return; onChange({ ...data, emotions: { ...data.emotions, [k]: "0" } }); };
+
+  const [openQuadrant, setOpenQuadrant] = useState(null);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customQuadrant, setCustomQuadrant] = useState("blue");
+
+  const submitCustom = () => {
+    const name = customName.trim();
+    if (!name) return;
+    if (data.emotions[name] === undefined) { onAddCustomEmotion && onAddCustomEmotion(name, customQuadrant); addEmotion(name); }
+    setCustomName(""); setShowCustomInput(false);
+  };
+
+  const loggedEmotions = Object.keys(data.emotions || {});
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <div style={{ fontFamily: "var(--display)", fontSize: 26, color: "var(--fg)", fontStyle: "italic" }}>{dayFull}</div>
+        {dayDate && <div style={{ fontSize: 14, color: "var(--muted)", fontFamily: "var(--mono)" }}>{dayDate}</div>}
+      </div>
+
+      <Card>
+        <SectionLabel>Target Behavior</SectionLabel>
+        <div style={{ background: "var(--surface)", borderRadius: 8, padding: "8px 10px", marginBottom: 14, fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>
+          <strong style={{ color: "var(--fg-soft)" }}>Urge</strong> = 0–5 &nbsp;·&nbsp; <strong style={{ color: "var(--fg-soft)" }}>Did it?</strong> = Y / N &nbsp;·&nbsp; <strong style={{ color: "var(--fg-soft)" }}>Meditation</strong> = mindful meditation today? Y / N
+        </div>
+        {targetBehavior && (
+          <div style={{ background: "var(--surface)", borderRadius: 10, padding: "10px 12px", marginBottom: 16, fontSize: 13, color: "var(--fg-soft)", fontStyle: "italic", lineHeight: 1.5 }}>{targetBehavior}</div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <SliderInput label="Urge Strength (0–5)" value={data.targetUrge} max={5} onChange={v => set("targetUrge", v)} />
+          <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+            <div>
+              <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 7 }}>Did it?</span>
+              <MultiToggle value={data.targetDid} options={["Y", "N"]} onChange={v => set("targetDid", v)} />
+            </div>
+            <div>
+              <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 7 }}>Mindful meditation?</span>
+              <MultiToggle value={data.meditation} options={["Y", "N"]} onChange={v => set("meditation", v)} />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionLabel>Emotion Snapshot (0–5)</SectionLabel>
+        <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 12, lineHeight: 1.5 }}>A quick read on how present each feeling was today. The deeper before→after work happens in the Arcs below.</div>
+        {loggedEmotions.length === 0 && (
+          <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic", marginBottom: 10 }}>No emotions logged yet. Use the picker below.</div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {loggedEmotions.map(em => {
+            const qColor = quadrantColor(em, customEmotionQuadrants);
+            return (
+              <div key={em} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: qColor, display: "inline-block" }} />{em}
+                  </span>
+                  <button onClick={() => removeEmotion(em)} aria-label={"Remove " + em} style={{ background: "transparent", border: "none", color: "var(--muted)", fontSize: 18, cursor: "pointer", padding: "2px 8px", lineHeight: 1 }}>×</button>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input type="range" min={0} max={5} step={1} value={data.emotions[em] === "" ? 0 : Number(data.emotions[em])} onChange={e => setEmotion(em, e.target.value)} style={{ flex: 1, accentColor: qColor }} />
+                  <span style={{ minWidth: 26, textAlign: "center", fontFamily: "var(--mono)", fontSize: 16, fontWeight: 700, color: qColor }}>{data.emotions[em] || "0"}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: loggedEmotions.length > 0 ? 16 : 4, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+          <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 10 }}>Add an emotion</span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: openQuadrant ? 14 : 0 }}>
+            {Object.entries(MOOD_METER).map(([key, q]) => {
+              const active = openQuadrant === key;
+              return (
+                <button key={key} onClick={() => { setOpenQuadrant(active ? null : key); setShowCustomInput(false); }}
+                  style={{ padding: "10px 8px", borderRadius: 12, border: "2px solid " + (active ? q.color : "transparent"), background: q.bg, cursor: "pointer", textAlign: "center", fontFamily: "var(--body)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: q.color, lineHeight: 1.3 }}>{q.label}</div>
+                  <div style={{ fontSize: 11, color: q.color, opacity: 0.85, marginTop: 2 }}>{q.sublabel}</div>
+                </button>
+              );
+            })}
+          </div>
+          {openQuadrant && (
+            <div style={{ background: MOOD_METER[openQuadrant].bg + "60", borderRadius: 12, padding: "10px 10px 4px", border: "1px solid " + MOOD_METER[openQuadrant].color + "30" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <button onClick={() => { setShowCustomInput(true); setCustomQuadrant(openQuadrant); }} style={{ padding: "6px 10px", borderRadius: 16, fontSize: 12, fontWeight: 600, border: "1.5px dashed " + MOOD_METER[openQuadrant].color, background: "transparent", color: MOOD_METER[openQuadrant].color, cursor: "pointer", fontFamily: "var(--body)" }}>+ Custom</button>
+                {MOOD_METER[openQuadrant].emotions.map(em => {
+                  const already = data.emotions[em] !== undefined;
+                  return <button key={em} onClick={() => addEmotion(em)} disabled={already} style={{ padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600, border: "1.5px solid " + (already ? "transparent" : MOOD_METER[openQuadrant].color + "70"), background: already ? MOOD_METER[openQuadrant].color + "30" : "#fff", color: already ? MOOD_METER[openQuadrant].color : "var(--fg)", cursor: already ? "default" : "pointer", opacity: already ? 0.6 : 1, fontFamily: "var(--body)" }}>{em}{already ? " ✓" : ""}</button>;
+                })}
+                {customEmotionQuadrants && Object.entries(customEmotionQuadrants).filter(([n, q]) => q === openQuadrant).map(([n]) => {
+                  const already = data.emotions[n] !== undefined;
+                  return <button key={n} onClick={() => addEmotion(n)} disabled={already} style={{ padding: "6px 12px", borderRadius: 16, fontSize: 12, fontWeight: 600, border: "1.5px solid " + (already ? "transparent" : MOOD_METER[openQuadrant].color + "70"), background: already ? MOOD_METER[openQuadrant].color + "30" : "#fff", color: already ? MOOD_METER[openQuadrant].color : "var(--fg)", fontStyle: "italic", cursor: already ? "default" : "pointer", opacity: already ? 0.6 : 1, fontFamily: "var(--body)" }}>{n}{already ? " ✓" : ""}</button>;
+                })}
+              </div>
+            </div>
+          )}
+          {showCustomInput && (
+            <div style={{ marginTop: 12, padding: "12px", borderRadius: 12, background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 8 }}>Custom emotion name</span>
+              <input type="text" value={customName} onChange={e => setCustomName(e.target.value)} placeholder="e.g. Misunderstood" style={{ width: "100%", background: "#fff", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 10px", color: "var(--fg)", fontSize: 14, boxSizing: "border-box", marginBottom: 10 }} />
+              <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 8 }}>Quadrant</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+                {Object.entries(MOOD_METER).map(([key, q]) => (
+                  <button key={key} onClick={() => setCustomQuadrant(key)} style={{ padding: "6px 4px", borderRadius: 8, fontSize: 11, fontWeight: 600, border: "1.5px solid " + (customQuadrant === key ? q.color : "var(--border)"), background: customQuadrant === key ? q.bg : "transparent", color: q.color, cursor: "pointer", fontFamily: "var(--body)" }}>{q.label} / {q.sublabel}</button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setShowCustomInput(false); setCustomName(""); }} style={{ flex: 1, padding: "10px", borderRadius: 8, background: "transparent", border: "1.5px solid var(--border)", color: "var(--muted)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "var(--body)" }}>Cancel</button>
+                <button onClick={submitCustom} disabled={!customName.trim()} style={{ flex: 2, padding: "10px", borderRadius: 8, background: customName.trim() ? "var(--accent)" : "var(--border)", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: customName.trim() ? "pointer" : "default", fontFamily: "var(--body)" }}>Add</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <SectionLabel color="#b08a6e">Emotion Arcs</SectionLabel>
+        <EmotionArcs arcs={data.emotionArcs || []} customMap={customEmotionQuadrants} journalSkills={journalSkills} onChange={arcs => onChange({ ...data, emotionArcs: arcs })} />
+      </Card>
+
+      <Card>
+        <SectionLabel color="#4a8a5e">Time & Margin</SectionLabel>
+        <TimeBlocks blocks={data.timeBlocks || []} categories={timeCategories} onChange={blocks => onChange({ ...data, timeBlocks: blocks })} />
+      </Card>
+
+      <Card>
+        <SectionLabel color="#b08a6e">Sleep</SectionLabel>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Hours</span>
+            <input type="number" min={0} max={24} step={0.5} placeholder="7.5" value={data.sleepHours} onChange={e => set("sleepHours", e.target.value)} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 10px", color: "var(--fg)", fontSize: 15, fontFamily: "var(--mono)", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ flex: 2 }}>
+            <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Quality</span>
+            <select value={data.sleepQuality} onChange={e => set("sleepQuality", e.target.value)} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 10px", color: data.sleepQuality ? "var(--fg)" : "var(--muted)", fontSize: 14 }}>
+              <option value="">Select…</option>
+              {["Poor", "Fair", "Good", "Great"].map(q => <option key={q} value={q}>{q}</option>)}
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionLabel color="#8a7eb0">Skills Used (0–7)</SectionLabel>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <SliderInput value={data.skills} max={7} onChange={v => set("skills", v)} />
+          {data.skills !== "" && <span style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>{SKILLS_SCALE[Number(data.skills)]}</span>}
+        </div>
+      </Card>
+
+      <Card>
+        <SectionLabel color="#c8a84b">Daily Notes</SectionLabel>
+        <span style={{ fontSize: 11, color: "var(--muted)", display: "block", marginBottom: 8, lineHeight: 1.5 }}>Thoughts, emotions, behaviors, body and environment — anything the structured fields didn't catch.</span>
+        <textarea rows={9} placeholder="What happened? What did you notice? What did you feel?" value={data.journal} onChange={e => set("journal", e.target.value)} onBlur={onFlush} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", color: "var(--fg)", fontSize: 14, lineHeight: 1.6, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", minHeight: 180 }} />
+      </Card>
+    </div>
+  );
+}
+
+const EMOTION_QUADRANTS = [
+  { id: "highUnpleasant", label: "High Energy\nUnpleasant", color: "#c0513a", textColor: "#fff", bg: "#f5e8e6", desc: "Activated and difficult", emotions: ["Anger", "Fear", "Anxious", "Overwhelmed", "Shame", "Pain", "Contempt", "Frustrated"] },
+  { id: "highPleasant", label: "High Energy\nPleasant", color: "#b8922a", textColor: "#fff", bg: "#faf3e0", desc: "Activated and good", emotions: ["Joy", "Pride", "Hopeful"] },
+  { id: "lowUnpleasant", label: "Low Energy\nUnpleasant", color: "#4a7aaa", textColor: "#fff", bg: "#e8eef5", desc: "Heavy and difficult", emotions: ["Sad", "Lonely", "Numb", "Ambivalent"] },
+  { id: "lowPleasant", label: "Low Energy\nPleasant", color: "#4a8a5e", textColor: "#fff", bg: "#e6f0eb", desc: "Calm and good", emotions: ["Grateful", "Hopeful"] },
+];
+
+const EMOTION_DEFINITIONS = {
+  "Pain": { def: "Deep emotional or physical hurt — an aching feeling from loss, rejection, or distress.", body: "Heavy chest, a sense of something being wounded, tearfulness or a desire to curl inward.", dbt: "Pain often signals that something important to you has been damaged or lost. It deserves acknowledgment, not avoidance." },
+  "Sad": { def: "A heavy, low feeling connected to loss, disappointment, or missing someone or something.", body: "Low energy, slowness, heaviness, quietness, wanting to withdraw.", dbt: "Sadness is a natural response to loss. Opposite Action: gently get active — move your body, reach out, do one small thing." },
+  "Shame": { def: "Feeling fundamentally flawed or bad as a person — not just that you did something wrong, but that you are wrong.", body: "Wanting to hide or disappear, heat in the face, shrinking, avoiding eye contact, shutting down.", dbt: "Shame thrives in silence. It tells you that you are the problem, not the behavior. Check the Facts — is shame fitting the actual situation?" },
+  "Anger": { def: "A hot, activated feeling when something feels wrong, unfair, threatening, or blocked.", body: "Tension in jaw or fists, heat, urgency, wanting to push back, raised voice.", dbt: "Anger signals that a boundary or value has been crossed. Opposite Action: avoid the situation temporarily, and practice being gentle." },
+  "Fear": { def: "An alarm response to perceived danger or uncertainty — the body preparing to protect you.", body: "Racing heart, shallow breathing, scanning for danger, urge to flee, freeze, or fight.", dbt: "Fear tells you there is danger — real or perceived. Opposite Action: approach the feared thing gently and in small steps." },
+  "Joy": { def: "A light, expansive feeling of pleasure, delight, or happiness — something good is happening right now.", body: "Lightness in the chest, smiling, energy, wanting to share or celebrate.", dbt: "Joy is worth savoring. Mindfully participate in it fully — don't second-guess it or wait for it to end." },
+  "Overwhelmed": { def: "Too much to process or handle — flooded, unable to cope, stretched past your limit.", body: "Mental fog, inability to prioritize, paralysis, feeling like everything is pressing in at once.", dbt: "Overwhelm often calls for TIPP — bring your body's intensity down first, then address what's in front of you One Thing at a Time." },
+  "Lonely": { def: "Feeling disconnected, unseen, or isolated — wanting real connection that feels absent.", body: "Emptiness, longing, a sense of being on the outside, craving contact or recognition.", dbt: "Loneliness is a signal to reach out, even when it feels pointless. Contribution — helping someone else — can shift it too." },
+  "Hopeful": { def: "A gentle forward-leaning feeling that things might improve — possibility without certainty.", body: "Slight lightness, openness to the future, a quiet motivation to try.", dbt: "Hope is worth protecting. Build on it with small actions. Let it coexist with uncertainty — it doesn't need proof to be real." },
+  "Ambivalent": { def: "Pulled in two directions at once — genuinely conflicted, or genuinely unsure what you feel.", body: "Going back and forth, difficulty deciding, a flatness or fog, not knowing what you want.", dbt: "Ambivalence often means two valid needs are in conflict. Check the Facts on both sides. Wise Mind can help you find what your deepest self actually knows." },
+  "Pride": { def: "A warm sense of satisfaction in yourself, your effort, or your identity.", body: "Upright posture, warmth in the chest, a quiet sense of having done something worthwhile.", dbt: "Pride reinforces values-aligned behavior. Let yourself feel it — it's not arrogance. Build Mastery is the skill that grows this." },
+  "Anxious": { def: "Worried and on edge about something that might happen — tight, anticipatory discomfort.", body: "Restlessness, tightness, racing thoughts, difficulty being present, checking behaviors.", dbt: "Anxiety often overestimates threat. Check the Facts: does the worry fit the actual situation? Paced Breathing directly calms the nervous system." },
+  "Contempt": { def: "A cold, dismissive feeling toward someone perceived as inferior, worthless, or disgusting.", body: "An internal pulling-away, a sense of looking down, disgust mixed with distance.", dbt: "Contempt in relationships is corrosive. GIVE — staying Interested and Validating — is the antidote, even when it's hard." },
+  "Numb": { def: "An absence of feeling — emotionally flat or disconnected, as if your feelings are behind glass.", body: "Emptiness, going through the motions, not caring, disconnection from your own experience.", dbt: "Numbness is often the nervous system's protection from overwhelm. It is itself an emotional state. Gently Observe and Describe what you notice without pushing." },
+  "Grateful": { def: "A warm recognition of something good — appreciation for what or who is present in your life.", body: "Warmth, softness, a sense of being cared for, wanting to give back or acknowledge.", dbt: "Gratitude is a positive emotion worth actively building. Increase Positive Events — notice and name good things as they happen." },
+  "Frustrated": { def: "The tension of being blocked — wanting something that isn't happening, efforts not working.", body: "Tightness, impatience, wanting to push harder or give up entirely, sighing, edge in voice.", dbt: "Frustration is blocked Anger. Identify what you actually want. Then ask: Is what I'm doing helping me get there? If not, try Effectively." },
+};
+
+function FeelingsWheel() {
+  const [selectedQuadrant, setSelectedQuadrant] = useState(null);
+  const [selectedEmotion, setSelectedEmotion] = useState(null);
+  const selectQuadrant = (q) => { if (selectedQuadrant?.id === q.id) { setSelectedQuadrant(null); setSelectedEmotion(null); } else { setSelectedQuadrant(q); setSelectedEmotion(null); } };
+  const selectEmotion = (em) => { setSelectedEmotion(selectedEmotion === em ? null : em); };
+  const def = selectedEmotion ? EMOTION_DEFINITIONS[selectedEmotion] : null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <div style={{ fontFamily: "var(--display)", fontSize: 20, color: "var(--fg)", fontStyle: "italic", marginBottom: 4 }}>What Am I Feeling?</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>Start by choosing your energy level and whether it feels pleasant or unpleasant right now.</div>
+      </div>
+      {selectedEmotion && def && (
+        <div style={{ background: selectedQuadrant.color, borderRadius: 14, padding: "16px 18px" }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>You might be feeling</div>
+          <div style={{ fontSize: 26, fontFamily: "var(--display)", fontStyle: "italic", color: "#fff", marginBottom: 10 }}>{selectedEmotion}</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.95)", lineHeight: 1.6, marginBottom: 10 }}>{def.def}</div>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.3)", paddingTop: 10, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>Body signals</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", lineHeight: 1.5 }}>{def.body}</div>
+          </div>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.3)", paddingTop: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>DBT note</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.9)", lineHeight: 1.5 }}>{def.dbt}</div>
+          </div>
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {EMOTION_QUADRANTS.map(q => (
+          <button key={q.id} onClick={() => selectQuadrant(q)} style={{ padding: "18px 12px", borderRadius: 14, border: `2px solid ${selectedQuadrant?.id === q.id ? q.color : "transparent"}`, background: q.bg, cursor: "pointer", textAlign: "center", transition: "all 0.15s", fontFamily: "var(--body)" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: q.color, lineHeight: 1.4, whiteSpace: "pre-line", marginBottom: 4 }}>{q.label}</div>
+            <div style={{ fontSize: 11, color: "var(--muted)" }}>{q.desc}</div>
+          </button>
+        ))}
+      </div>
+      {selectedQuadrant && (
+        <Card style={{ borderColor: selectedQuadrant.color + "50" }}>
+          <SectionLabel color={selectedQuadrant.color}>Select what fits — tap to see definition</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {selectedQuadrant.emotions.map(em => {
+              const isSelected = selectedEmotion === em;
+              return (
+                <button key={em} onClick={() => selectEmotion(em)} style={{ padding: "12px 14px", borderRadius: 12, textAlign: "left", cursor: "pointer", border: `1.5px solid ${isSelected ? selectedQuadrant.color : "var(--border)"}`, background: isSelected ? selectedQuadrant.bg : "var(--surface)", transition: "all 0.15s", fontFamily: "var(--body)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 15, fontWeight: isSelected ? 700 : 500, color: isSelected ? selectedQuadrant.color : "var(--fg)" }}>{em}</span>
+                    {isSelected && <span style={{ fontSize: 11, color: selectedQuadrant.color, fontWeight: 700 }}>✓ Selected</span>}
+                    {!isSelected && <span style={{ fontSize: 12, color: "var(--muted)" }}>+</span>}
+                  </div>
+                  {isSelected && <div style={{ fontSize: 12, color: selectedQuadrant.color, marginTop: 3, opacity: 0.8 }}>See definition above ↑</div>}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+      {!selectedQuadrant && !selectedEmotion && (
+        <div style={{ background: "var(--surface)", borderRadius: 12, padding: "20px", textAlign: "center" }}>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>Tap one of the four zones above to see the emotions that fit that state, with definitions and body signals to help you identify what you're feeling.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SkillsReference() {
+  const [open, setOpen] = useState(null);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      {SKILLS_REFERENCE.map((module, mi) => (
+        <div key={mi}>
+          <div style={{ fontFamily: "var(--display)", fontSize: 19, color: "var(--fg)", marginBottom: 10, fontStyle: "italic" }}>{module.module}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            {module.skills.map((skill, si) => {
+              const key = `${mi}-${si}`;
+              const isOpen = open === key;
+              return (
+                <button key={si} onClick={() => setOpen(isOpen ? null : key)} style={{ background: "var(--card)", border: `1px solid ${isOpen ? module.color : "var(--border)"}`, borderRadius: 12, padding: "12px 14px", textAlign: "left", cursor: "pointer", width: "100%" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--fg)", display: "block" }}>{skill.name}</span>
+                      <span style={{ fontSize: 11, color: "var(--muted)" }}>{skill.category}</span>
+                    </div>
+                    <span style={{ color: module.color, fontSize: 18, marginLeft: 10 }}>{isOpen ? "−" : "+"}</span>
+                  </div>
+                  {isOpen && <p style={{ marginTop: 10, fontSize: 13, color: "var(--fg-soft)", lineHeight: 1.65, borderTop: "1px solid var(--border)", paddingTop: 10 }}>{skill.desc}</p>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Settings({ settings, onSave, onExport, onImport }) {
+  const [emotions, setEmotions] = useState([...settings.trackedEmotions]);
+  const [target, setTarget] = useState(settings.targetBehavior || "");
+  const [journalSkills, setJournalSkills] = useState([...(settings.journalSkills || DEFAULT_JOURNAL_SKILLS)]);
+  const [timeCats, setTimeCats] = useState([...(settings.timeCategories || DEFAULT_TIME_CATEGORIES)]);
+  const [newCat, setNewCat] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [showImport, setShowImport] = useState(false);
+
+  const toggle = (em) => { setEmotions(emotions.includes(em) ? emotions.filter(e => e !== em) : [...emotions, em]); };
+  const toggleSkill = (s) => { setJournalSkills(journalSkills.includes(s) ? journalSkills.filter(x => x !== s) : [...journalSkills, s]); };
+  const removeCat = (name) => setTimeCats(timeCats.filter(c => c.name !== name));
+  const addCat = () => {
+    const n = newCat.trim();
+    if (!n || timeCats.some(c => c.name === n)) return;
+    const palette = ["#7a9e87", "#b08a6e", "#c8a84b", "#4a8a5e", "#c0513a", "#8a7eb0", "#4a7aaa", "#9e8e7e"];
+    setTimeCats([...timeCats, { name: n, color: palette[timeCats.length % palette.length] }]);
+    setNewCat("");
+  };
+  const handleSave = () => { onSave({ trackedEmotions: emotions, targetBehavior: target, journalSkills, timeCategories: timeCats }); setSaved(true); setTimeout(() => setSaved(false), 2000); };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <Card>
+        <SectionLabel>Target Behavior</SectionLabel>
+        <div style={{ background: "var(--surface)", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "var(--fg-soft)", lineHeight: 1.65, fontStyle: "italic" }}>A specific behavior you are working to reduce or stop — something that gets in the way of the life you want.</div>
+        <textarea rows={2} placeholder="Describe your target behavior…" value={target} onChange={e => setTarget(e.target.value)} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 10px", color: "var(--fg)", fontSize: 14, resize: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+      </Card>
+
+      <Card>
+        <SectionLabel>Snapshot Emotions</SectionLabel>
+        <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 12, lineHeight: 1.5 }}>The emotions pre-loaded each day for the quick 0–5 snapshot. Keep one or two positive. The deeper before→after work lives in Arcs, where you pick 2–3 emotions per day.</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {Object.entries(MOOD_METER).map(([key, q]) => (
+            <div key={key}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: q.color, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{q.label} · {q.sublabel}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {q.emotions.map(em => {
+                  const on = emotions.includes(em);
+                  return <button key={em} onClick={() => toggle(em)} style={{ padding: "5px 11px", borderRadius: 16, fontSize: 12, fontWeight: 600, border: "1.5px solid " + (on ? q.color : q.color + "40"), background: on ? q.color : "#fff", color: on ? "#fff" : q.color, cursor: "pointer", fontFamily: "var(--body)" }}>{em}</button>;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+        <span style={{ fontSize: 11, color: "var(--muted)", display: "block", marginTop: 14 }}>{emotions.length} selected</span>
+      </Card>
+
+      <Card>
+        <SectionLabel color="#b08a6e">Arc Skill List</SectionLabel>
+        <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 12, lineHeight: 1.5 }}>When a skill is what shifted an emotion, these are the options you'll see. Pick the ones you actually use — you can always type a Custom one in the moment.</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {ALL_SKILLS_LIST.map(s => {
+            const on = journalSkills.includes(s);
+            return <button key={s} onClick={() => toggleSkill(s)} style={{ padding: "5px 10px", borderRadius: 16, fontSize: 11.5, fontWeight: 600, border: "1.5px solid " + (on ? "#b08a6e" : "var(--border)"), background: on ? "#b08a6e" : "#fff", color: on ? "#fff" : "var(--muted)", cursor: "pointer", fontFamily: "var(--body)" }}>{s}</button>;
+          })}
+        </div>
+        <span style={{ fontSize: 11, color: "var(--muted)", display: "block", marginTop: 12 }}>{journalSkills.length} selected</span>
+      </Card>
+
+      <Card>
+        <SectionLabel color="#4a8a5e">Time Categories</SectionLabel>
+        <span style={{ fontSize: 12, color: "var(--muted)", display: "block", marginBottom: 12, lineHeight: 1.5 }}>The buckets you sort your day into in Time & Margin.</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+          {timeCats.map(c => (
+            <span key={c.name} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 6px 5px 11px", borderRadius: 16, fontSize: 12, fontWeight: 600, background: c.color, color: "#fff" }}>
+              {c.name}
+              <button onClick={() => removeCat(c.name)} style={{ background: "rgba(255,255,255,0.25)", border: "none", color: "#fff", borderRadius: "50%", width: 16, height: 16, lineHeight: 1, cursor: "pointer", fontSize: 12 }}>×</button>
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Add a category…" style={{ flex: 1, background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "9px 11px", color: "var(--fg)", fontSize: 14, boxSizing: "border-box" }} />
+          <button onClick={addCat} disabled={!newCat.trim()} style={{ padding: "9px 16px", borderRadius: 8, background: newCat.trim() ? "var(--accent)" : "var(--border)", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: newCat.trim() ? "pointer" : "default", fontFamily: "var(--body)" }}>Add</button>
+        </div>
+      </Card>
+
+      <button onClick={handleSave} style={{ padding: "14px", borderRadius: 12, background: "var(--accent)", border: "none", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "var(--body)" }}>{saved ? "Saved ✓" : "Save Settings"}</button>
+
+      <Card style={{ marginTop: 8 }}>
+        <SectionLabel color="var(--muted)">Data</SectionLabel>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button onClick={onExport} style={{ padding: "12px", borderRadius: 10, background: "var(--surface)", border: "1.5px solid var(--border)", color: "var(--fg-soft)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "var(--body)" }}>📤 Export All Data</button>
+          <button onClick={() => setShowImport(!showImport)} style={{ padding: "12px", borderRadius: 10, background: "var(--surface)", border: "1.5px solid var(--border)", color: "var(--fg-soft)", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "var(--body)" }}>📥 Import Data</button>
+          {showImport && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>Paste your exported data below then tap Import.</div>
+              <textarea rows={4} placeholder="Paste exported data here…" value={importText} onChange={e => setImportText(e.target.value)} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "8px 10px", color: "var(--fg)", fontSize: 13, resize: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
+              <button onClick={() => { onImport(importText); setImportText(""); setShowImport(false); }} style={{ padding: "12px", borderRadius: 10, background: "#c0513a", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "var(--body)" }}>Import — This will replace all current data</button>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+const SKILLS_PROGRESS_MODULES = [
+  { key: "mindfulness", icon: "🧘", label: "Core Mindfulness", mastery: "I notice my thoughts and feelings without reacting. I stay present. I access Wise Mind regularly and trust it." },
+  { key: "interpersonal", icon: "🤝", label: "Interpersonal Effectiveness", mastery: "I ask for what I need clearly. I keep my self-respect in hard conversations. I maintain relationships I value." },
+  { key: "emotionReg", icon: "💛", label: "Emotion Regulation", mastery: "I understand my emotions. I use PLEASE skills daily. I act opposite to unhelpful urges. I don't suppress or amplify." },
+  { key: "distressTol", icon: "🛡️", label: "Distress Tolerance", mastery: "I survive crises without making things worse. I reach for a skill before acting impulsively. I practice radical acceptance." },
+];
+
+const CAPACITY_LABELS = ["", "Don't know it yet", "Learned but struggle to use", "Can use with effort", "Use it consistently", "Feels natural and automatic"];
+const CONFIDENCE_LABELS = ["", "Not confident at all", "A little confident", "Somewhat confident", "Mostly confident", "Fully confident it helps me"];
+
+function SkillsProgress({ progress, onChange }) {
+  const sp = progress || {};
+  const set = (key, field, val) => onChange({ ...sp, [key]: { ...(sp[key] || {}), [field]: val } });
+  const setField = (field, val) => onChange({ ...sp, [field]: val });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <div style={{ fontFamily: "var(--display)", fontSize: 20, color: "var(--fg)", fontStyle: "italic", marginBottom: 4 }}>Skills Progress</div>
+        <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>Rate where you actually are — not where you think you should be. Update weekly.</div>
+      </div>
+      <div style={{ background: "var(--surface)", borderRadius: 10, padding: "10px 12px", fontSize: 11, color: "var(--muted)", lineHeight: 1.7 }}>
+        <strong style={{ color: "var(--fg-soft)" }}>Capacity:</strong> 1 = don't know it · 2 = learned, struggle · 3 = use with effort · 4 = use consistently · 5 = automatic<br/>
+        <strong style={{ color: "var(--fg-soft)" }}>Confidence:</strong> 1 = not at all · 2 = a little · 3 = somewhat · 4 = mostly · 5 = fully confident
+      </div>
+      {SKILLS_PROGRESS_MODULES.map(mod => {
+        const vals = sp[mod.key] || {};
+        return (
+          <Card key={mod.key}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 20 }}>{mod.icon}</span>
+              <span style={{ fontFamily: "var(--display)", fontSize: 16, fontStyle: "italic", color: "var(--fg)" }}>{mod.label}</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic", lineHeight: 1.5, marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--border)" }}>{mod.mastery}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <SliderInput label="Capacity (1–5)" value={vals.capacity || ""} max={5} onChange={v => set(mod.key, "capacity", v)} />
+                {vals.capacity && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4, fontStyle: "italic" }}>{CAPACITY_LABELS[Number(vals.capacity)]}</div>}
+              </div>
+              <div>
+                <SliderInput label="Confidence (1–5)" value={vals.confidence || ""} max={5} onChange={v => set(mod.key, "confidence", v)} />
+                {vals.confidence && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4, fontStyle: "italic" }}>{CONFIDENCE_LABELS[Number(vals.confidence)]}</div>}
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+      <Card>
+        <SectionLabel>Weekly Reflection</SectionLabel>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Which module do you feel most confident in?</span>
+            <select value={sp.mostConfident || ""} onChange={e => setField("mostConfident", e.target.value)} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", color: sp.mostConfident ? "var(--fg)" : "var(--muted)", fontSize: 14 }}>
+              <option value="">Select…</option>
+              {SKILLS_PROGRESS_MODULES.map(m => <option key={m.key} value={m.label}>{m.icon} {m.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Where do you most want to grow?</span>
+            <select value={sp.wantToGrow || ""} onChange={e => setField("wantToGrow", e.target.value)} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", color: sp.wantToGrow ? "var(--fg)" : "var(--muted)", fontSize: 14 }}>
+              <option value="">Select…</option>
+              {SKILLS_PROGRESS_MODULES.map(m => <option key={m.key} value={m.label}>{m.icon} {m.label}</option>)}
+            </select>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function TrendsDashboard({ weeks }) {
+  const [activeEmotion, setActiveEmotion] = useState(null);
+  const [timeRange, setTimeRange] = useState("week");
+
+  if (!weeks.length) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontFamily: "var(--display)", fontSize: 20, color: "var(--fg)", fontStyle: "italic" }}>Trends</div>
+        <div style={{ background: "var(--surface)", borderRadius: 14, padding: "28px 20px", textAlign: "center", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📈</div>
+          <div style={{ fontSize: 14, color: "var(--fg)", fontWeight: 600, marginBottom: 6 }}>No data yet</div>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>Start logging to see trends.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const customQuadrantsMerged = (() => { const all = {}; for (const w of weeks) { if (w.customEmotionQuadrants) Object.assign(all, w.customEmotionQuadrants); } return all; })();
+  const filteredWeeks = timeRange === "all" ? weeks : timeRange === "month" ? weeks.slice(-4) : weeks.slice(-1);
+
+  const quadrantCounts = { red: 0, yellow: 0, blue: 0, green: 0, other: 0 };
+  let totalCheckins = 0;
+  for (const w of filteredWeeks) {
+    for (const d of DAYS) {
+      const ems = w.days[d]?.emotions || {};
+      for (const [em, val] of Object.entries(ems)) {
+        if (Number(val) > 0) { const q = EMOTION_TO_QUADRANT[em] || customQuadrantsMerged[em] || "other"; quadrantCounts[q] = (quadrantCounts[q] || 0) + 1; totalCheckins++; }
+      }
+    }
+  }
+
+  const interventionStats = (() => {
+    const map = {};
+    for (const w of filteredWeeks) {
+      for (const d of DAYS) {
+        for (const a of (w.days[d]?.emotionArcs || [])) {
+          if (!a.afterType) continue;
+          const peak = Number(a.peak), end = Number(a.end);
+          if (!peak || !end) continue;
+          if (!map[a.afterType]) map[a.afterType] = { delta: 0, n: 0 };
+          map[a.afterType].delta += (end - peak); map[a.afterType].n++;
+        }
+      }
+    }
+    return Object.entries(map).map(([k, v]) => ({ type: k, avg: v.delta / v.n, n: v.n })).sort((a, b) => a.avg - b.avg);
+  })();
+
+  const catTotals = {};
+  let totalHours = 0;
+  for (const w of filteredWeeks) {
+    for (const d of DAYS) {
+      for (const b of (w.days[d]?.timeBlocks || [])) {
+        const hh = blockHours(b);
+        if (hh > 0 && b.category) {
+          if (!catTotals[b.category]) catTotals[b.category] = { hours: 0, valSum: 0, valCount: 0 };
+          catTotals[b.category].hours += hh;
+          if (b.valence !== "" && b.valence !== undefined) { catTotals[b.category].valSum += Number(b.valence); catTotals[b.category].valCount++; }
+          totalHours += hh;
+        }
+      }
+    }
+  }
+
+  const emotions = weeks[weeks.length - 1].trackedEmotions || DEFAULT_EMOTIONS;
+  const EMOTION_COLORS = ["#c0513a","#6b9fd4","#9b7fca","#e8b84b","#6dab7e","#b08a6e","#8a7eb0","#d9604a"];
+
+  const chartData = weeks.map(w => {
+    const row = { week: w.weekStart.slice(5) };
+    emotions.forEach(em => { const vals = DAYS.map(d => Number(w.days[d]?.emotions?.[em] || 0)); row[em] = parseFloat((vals.reduce((a,b) => a+b,0) / 7).toFixed(1)); });
+    const sleepVals = DAYS.map(d => Number(w.days[d]?.sleepHours || 0)).filter(v => v > 0);
+    row.sleep = sleepVals.length ? parseFloat((sleepVals.reduce((a,b) => a+b,0) / sleepVals.length).toFixed(1)) : 0;
+    const skillVals = DAYS.map(d => w.days[d]?.skills).filter(s => s !== "" && s !== undefined).map(Number);
+    row.skills = skillVals.length ? parseFloat((skillVals.reduce((a,b) => a+b,0) / skillVals.length).toFixed(1)) : 0;
+    row.days = DAYS.filter(d => w.days[d]?.journal || (w.days[d]?.emotionArcs||[]).length || Number(w.days[d]?.targetUrge) > 0).length;
+    return row;
+  });
+
+  const StatCard = ({ label, value, sub, color }) => (
+    <div style={{ background: "var(--card)", borderRadius: 12, padding: "14px", border: "1px solid var(--border)", flex: 1 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: color || "var(--accent)", fontFamily: "var(--mono)" }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+
+  const latest = chartData[chartData.length - 1];
+  const prev = chartData[chartData.length - 2];
+  const sleepTrend = prev && latest.sleep > prev.sleep ? "↑" : prev && latest.sleep < prev.sleep ? "↓" : "→";
+  const skillsTrend = prev && latest.skills > prev.skills ? "↑" : prev && latest.skills < prev.skills ? "↓" : "→";
+
+  const ChartLine = ({ data, dataKey, color, width = 300, height = 100 }) => {
+    const vals = data.map(d => d[dataKey]);
+    const max = Math.max(...vals, 1);
+    const pts = vals.map((v, i) => { const x = (i / Math.max(vals.length - 1, 1)) * (width - 20) + 10; const y = height - 10 - (v / max) * (height - 20); return x + "," + y; }).join(" ");
+    return (
+      <svg width="100%" viewBox={"0 0 " + width + " " + height} style={{ overflow: "visible" }}>
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {vals.map((v, i) => { const x = (i / Math.max(vals.length - 1, 1)) * (width - 20) + 10; const y = height - 10 - (v / max) * (height - 20); return <circle key={i} cx={x} cy={y} r="4" fill={color} />; })}
+        {data.map((d, i) => { const x = (i / Math.max(data.length - 1, 1)) * (width - 20) + 10; return <text key={i} x={x} y={height} textAnchor="middle" fontSize="9" fill="#9e8e7e">{d.week}</text>; })}
+      </svg>
+    );
+  };
+
+  const rangeLabel = timeRange === "week" ? "This week" : timeRange === "month" ? "Last 4 weeks" : "All time";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ fontFamily: "var(--display)", fontSize: 20, color: "var(--fg)", fontStyle: "italic" }}>Trends</div>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <StatCard label="Avg Sleep" value={latest.sleep + "h"} sub={prev ? sleepTrend + " vs last week" : "this week"} color="#b08a6e" />
+        <StatCard label="Avg Skills" value={latest.skills + "/7"} sub={prev ? skillsTrend + " vs last week" : "this week"} color="#8a7eb0" />
+        <StatCard label="Days Logged" value={latest.days + "/7"} sub="this week" />
+      </div>
+
+      <div style={{ background: "var(--card)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--accent)" }}>Quadrant Breakdown</div>
+          <span style={{ fontSize: 11, color: "var(--muted)" }}>{totalCheckins} check-ins</span>
+        </div>
+        <div style={{ display: "flex", gap: 4, marginBottom: 14, background: "var(--surface)", padding: 4, borderRadius: 10 }}>
+          {[["week","Week"],["month","Month"],["all","All time"]].map(([k, lbl]) => (
+            <button key={k} onClick={() => setTimeRange(k)} style={{ flex: 1, padding: "7px 4px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: "none", background: timeRange === k ? "var(--card)" : "transparent", color: timeRange === k ? "var(--fg)" : "var(--muted)", boxShadow: timeRange === k ? "0 1px 3px rgba(0,0,0,0.08)" : "none", cursor: "pointer", fontFamily: "var(--body)" }}>{lbl}</button>
+          ))}
+        </div>
+        {totalCheckins === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--muted)", textAlign: "center", padding: "20px 0", fontStyle: "italic" }}>No emotions rated above 0 in {rangeLabel.toLowerCase()} yet.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {["red", "yellow", "blue", "green"].map(qKey => {
+              const q = MOOD_METER[qKey];
+              const count = quadrantCounts[qKey] || 0;
+              const pct = totalCheckins ? (count / totalCheckins) * 100 : 0;
+              return (
+                <div key={qKey}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: q.color }}>{q.label} · {q.sublabel}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: q.color, fontFamily: "var(--mono)" }}>{Math.round(pct)}%</span>
+                  </div>
+                  <div style={{ height: 10, background: q.bg, borderRadius: 6, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: pct + "%", background: q.color, borderRadius: 6, transition: "width 0.3s" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {interventionStats.length > 0 && (
+        <div style={{ background: "var(--card)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#b08a6e", marginBottom: 4 }}>What Moves the Needle</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>Average intensity change (peak → end) by what you tried. More negative = brought the feeling down more.</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {interventionStats.map(s => {
+              const mag = Math.min(Math.abs(s.avg) / 4, 1) * 100;
+              const down = s.avg < 0;
+              return (
+                <div key={s.type}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)" }}>{s.type} <span style={{ color: "var(--muted)", fontWeight: 400 }}>· {s.n}×</span></span>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--mono)", color: down ? "#4a8a5e" : "#c0513a" }}>{s.avg > 0 ? "+" : ""}{s.avg.toFixed(1)}</span>
+                  </div>
+                  <div style={{ height: 8, background: "var(--surface)", borderRadius: 5, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: mag + "%", background: down ? "#4a8a5e" : "#c0513a", borderRadius: 5 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {totalHours > 0 && (
+        <div style={{ background: "var(--card)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#4a8a5e", marginBottom: 4 }}>Where the Time Goes</div>
+          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 14, lineHeight: 1.5 }}>Hours by category. The dot shows whether it tends to drain (red) or restore (green) you.</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {Object.entries(catTotals).sort((a, b) => b[1].hours - a[1].hours).map(([cat, v]) => {
+              const pct = totalHours ? (v.hours / totalHours) * 100 : 0;
+              const avg = v.valCount ? v.valSum / v.valCount : 0;
+              const dotColor = avg > 0.3 ? "#4a8a5e" : avg < -0.3 ? "#c0513a" : "#9e8e7e";
+              return (
+                <div key={cat}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg)", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, display: "inline-block" }} />{cat}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-soft)", fontFamily: "var(--mono)" }}>{v.hours.toFixed(1)}h · {Math.round(pct)}%</span>
+                  </div>
+                  <div style={{ height: 8, background: "var(--surface)", borderRadius: 5, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: pct + "%", background: "var(--accent)", borderRadius: 5 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {weeks.length >= 2 && (
+        <>
+          <div style={{ background: "var(--card)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#b08a6e", marginBottom: 14 }}>Sleep Hours</div>
+            <ChartLine data={chartData} dataKey="sleep" color="#b08a6e" height={90} />
+          </div>
+          <div style={{ background: "var(--card)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#8a7eb0", marginBottom: 14 }}>Skills Score (avg)</div>
+            <ChartLine data={chartData} dataKey="skills" color="#8a7eb0" height={90} />
+          </div>
+          <div style={{ background: "var(--card)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--accent)", marginBottom: 12 }}>Emotions (weekly avg)</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+              {emotions.map((em, i) => (
+                <button key={em} onClick={() => setActiveEmotion(activeEmotion === em ? null : em)} style={{ padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, border: "1.5px solid " + (activeEmotion === em ? EMOTION_COLORS[i % EMOTION_COLORS.length] : "var(--border)"), background: activeEmotion === em ? EMOTION_COLORS[i % EMOTION_COLORS.length] : "var(--surface)", color: activeEmotion === em ? "#fff" : "var(--muted)", cursor: "pointer", fontFamily: "var(--body)" }}>{em}</button>
+              ))}
+            </div>
+            {activeEmotion && <ChartLine data={chartData} dataKey={activeEmotion} color={EMOTION_COLORS[emotions.indexOf(activeEmotion) % EMOTION_COLORS.length]} height={90} />}
+            {!activeEmotion && <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: "20px 0" }}>Tap an emotion to see its trend</div>}
+          </div>
+        </>
+      )}
+
+      {weeks.length < 2 && (
+        <div style={{ background: "var(--surface)", borderRadius: 14, padding: "20px", textAlign: "center", border: "1px solid var(--border)" }}>
+          <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6 }}>Weekly trend charts appear after 2+ weeks of data.</div>
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center" }}>{weeks.length} {weeks.length === 1 ? "week" : "weeks"} of data · {weeks.length >= 4 ? "Good trend visibility" : "More weeks = clearer trends"}</div>
+    </div>
+  );
+}
+
+function WeekReport({ week, customMap }) {
+  const emotions = week.trackedEmotions || DEFAULT_EMOTIONS;
+  const range = completedRange(week);
+  const fmt = d => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const rangeLabel = range.empty ? "No entries yet" : (range.startIdx === range.endIdx ? fmt(range.startDate) : `${fmt(range.startDate)} – ${fmt(range.endDate)}`);
+  const [copied, setCopied] = useState(false);
+  const [csvCopied, setCsvCopied] = useState(false);
+  const [pdfState, setPdfState] = useState("idle");
+
+  const downloadPdf = async () => {
+    setPdfState("loading");
+    try { await ensureJsPdf(); await generateDiaryPdf(week, emotions, customMap); setPdfState("done"); setTimeout(() => setPdfState("idle"), 2500); }
+    catch (e) { console.error(e); setPdfState("error"); alert("PDF generation failed: " + (e?.message || "unknown error") + "\n\nIf you're offline, the PDF library couldn't load. Try again with internet."); setTimeout(() => setPdfState("idle"), 2000); }
+  };
+
+  const buildTextReport = () => {
+    let out = [];
+    out.push("DBT WEEKLY DIARY CARD");
+    out.push("Taylor Abeel  |  " + rangeLabel);
+    if (week.targetBehavior) out.push("Target Behavior: " + week.targetBehavior);
+    DAYS.forEach((day, i) => {
+      const d = week.days[day];
+      const arcs = d.emotionArcs || [];
+      const blocks = (d.timeBlocks || []).filter(b => blockHours(b) > 0);
+      const hasAny = Number(d.targetUrge) > 0 || d.targetDid || d.meditation || d.sleepHours || d.skills !== "" || arcs.length || blocks.length || d.journal;
+      if (!hasAny) return;
+      out.push("");
+      out.push(DAY_FULL[i]);
+      out.push("  Urge: " + (d.targetUrge || "0") + "  Did it: " + (d.targetDid || "—") + "  Meditation: " + (d.meditation || "—") + "  Sleep: " + (d.sleepHours ? d.sleepHours + "h" : "—") + "  Skills: " + (d.skills !== "" && d.skills !== undefined ? d.skills + "/7" : "—"));
+      arcs.forEach(a => {
+        const after = [a.afterType, a.afterDetail].filter(Boolean).join(": ");
+        out.push("  Arc: " + (a.emotion || "—") + " | before: " + (a.before || "—") + " | " + (a.onset || "—") + " " + (a.start||"-") + "->" + (a.peak||"-") + "->" + (a.end||"-") + " | lasted: " + (a.duration || "—") + " | after: " + (after || "—"));
+      });
+      blocks.forEach(b => { out.push("  Time: " + b.start + "-" + b.end + " " + (b.category || "—") + " (" + (VALENCE_LABELS[String(b.valence)] || "Neutral") + ")"); });
+      if (d.journal) out.push("  Notes: " + d.journal);
+    });
+    out.push("");
+    out.push("Generated " + new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) + " — DBT Diary Card — Taylor Abeel");
+    return out.join("\n");
+  };
+
+  const copyText = (text, setFlag) => {
+    navigator.clipboard.writeText(text).then(() => { setFlag(true); setTimeout(() => setFlag(false), 3000); }).catch(() => {
+      const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+      setFlag(true); setTimeout(() => setFlag(false), 3000);
+    });
+  };
+
+  const buildCsvRow = () => {
+    const sleepVals = DAYS.map(d => Number(week.days[d]?.sleepHours || 0)).filter(v => v > 0);
+    const avgSleep = sleepVals.length ? (sleepVals.reduce((a,b)=>a+b,0)/sleepVals.length).toFixed(1) : "";
+    const skillVals = DAYS.map(d => week.days[d]?.skills).filter(s => s !== "" && s !== undefined).map(Number);
+    const avgSkills = skillVals.length ? (skillVals.reduce((a,b)=>a+b,0)/skillVals.length).toFixed(1) : "";
+    const daysCompleted = activeDayIndexes(week).length;
+    const meditationDays = DAYS.filter(d => week.days[d]?.meditation === "Y").length;
+    const row = [week.weekStart, daysCompleted, ...ALL_EMOTIONS.map(em => { const vals = DAYS.map(d => Number(week.days[d]?.emotions?.[em] || 0)); return (vals.reduce((a,b)=>a+b,0)/7).toFixed(1); }), avgSleep, avgSkills, week.targetBehavior || "", meditationDays];
+    return row.join("\t");
+  };
+
+  const pdfLabel = pdfState === "loading" ? "Generating PDF…" : pdfState === "done" ? "✓ PDF Downloaded" : pdfState === "error" ? "Try Again" : "📄 Download PDF for Therapist";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: "var(--surface)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)" }}>
+        <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 3 }}>Exporting</span>
+        <span style={{ fontSize: 13, color: "var(--fg)" }}>{rangeLabel}</span>
+        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>The PDF, title, and filename use only the days you've logged — safe to export mid-week.</div>
+      </div>
+
+      <button onClick={downloadPdf} disabled={pdfState === "loading"} style={{ background: pdfState === "done" ? "#5a8a6a" : "var(--accent)", border: "none", color: "#fff", fontWeight: 700, fontSize: 15, padding: "16px", borderRadius: 12, cursor: pdfState === "loading" ? "wait" : "pointer", fontFamily: "var(--body)", opacity: pdfState === "loading" ? 0.8 : 1, transition: "background 0.2s" }}>{pdfLabel}</button>
+
+      <button onClick={() => copyText(buildTextReport(), setCopied)} style={{ background: copied ? "#5a8a6a" : "var(--surface)", border: "1.5px solid var(--border)", color: copied ? "#fff" : "var(--fg-soft)", fontWeight: 600, fontSize: 14, padding: "13px", borderRadius: 12, cursor: "pointer", fontFamily: "var(--body)", transition: "background 0.2s" }}>{copied ? "✓ Text Report Copied" : "📋 Copy Text Report"}</button>
+
+      <div style={{ background: "var(--card)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg)", marginBottom: 4 }}>📊 Google Sheets</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6, marginBottom: 10 }}>Copy this week's data and paste it into the next empty row in your shared sheet.</div>
+        <a href="https://docs.google.com/spreadsheets/d/1IIl0G36OLTe9cKHk4S6B6psyhUbttu2xxpjBR023Cw8/edit?gid=614495511#gid=614495511" target="_blank" rel="noopener noreferrer" style={{ display: "block", textAlign: "center", padding: "10px", marginBottom: 10, borderRadius: 10, border: "1.5px solid var(--border)", background: "var(--surface)", color: "var(--accent)", fontWeight: 600, fontSize: 13, textDecoration: "none" }}>📅 Open Google Sheet ↗</a>
+        <button onClick={() => copyText(buildCsvRow(), setCsvCopied)} style={{ width: "100%", background: csvCopied ? "#5a8a6a" : "var(--accent)", border: "none", color: "#fff", fontWeight: 700, fontSize: 14, padding: "13px", borderRadius: 10, cursor: "pointer", fontFamily: "var(--body)", transition: "background 0.2s" }}>{csvCopied ? "✓ Copied!" : "📋 Copy Week Data for Sheets"}</button>
+      </div>
+    </div>
+  );
+}
+
+function WeekOverview({ week, onSelectDay }) {
+  const completedDays = activeDayIndexes(week).length;
+  const weekStartDate = parseLocalDate(week.weekStart);
+  const todayStr = localDateStr(new Date());
+  const dayDates = DAYS.map((_, i) => { const d = new Date(weekStartDate); d.setDate(weekStartDate.getDate() + i); return localDateStr(d); });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {week.targetBehavior && (
+        <Card style={{ background: "var(--surface)" }}>
+          <span style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 5 }}>Target Behavior</span>
+          <span style={{ fontSize: 14, color: "var(--fg)" }}>{week.targetBehavior}</span>
+        </Card>
+      )}
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>Week progress</span>
+          <span style={{ fontSize: 12, fontFamily: "var(--mono)", color: "var(--accent)" }}>{completedDays}/7 days</span>
+        </div>
+        <div style={{ height: 6, background: "var(--surface)", borderRadius: 3, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${(completedDays / 7) * 100}%`, background: "var(--accent)", borderRadius: 3, transition: "width 0.4s" }} />
+        </div>
+      </Card>
+      {DAYS.map((day, i) => {
+        const d = week.days[day];
+        const arcs = d.emotionArcs || [];
+        const hasData = d.journal || arcs.length || Number(d.targetUrge) > 0 || (d.timeBlocks || []).length;
+        const isToday = dayDates[i] === todayStr;
+        const dateLabel = (() => { const dt = new Date(weekStartDate); dt.setDate(weekStartDate.getDate() + i); return (dt.getMonth() + 1) + "/" + dt.getDate(); })();
+        return (
+          <button key={day} onClick={() => onSelectDay(day)} style={{ background: isToday ? "var(--surface)" : "var(--card)", borderRadius: 14, padding: "15px 16px", border: `${isToday ? "2px" : "1.5px"} solid ${isToday ? "var(--accent)" : hasData ? "var(--accent)60" : "var(--border)"}`, cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <div style={{ fontFamily: "var(--display)", fontSize: 18, color: isToday ? "var(--accent)" : "var(--fg)", fontStyle: "italic", fontWeight: isToday ? 700 : 400 }}>{DAY_FULL[i]}</div>
+                <div style={{ fontSize: 12, color: isToday ? "var(--accent)" : "var(--muted)", fontFamily: "var(--mono)" }}>{dateLabel}{isToday ? " • Today" : ""}</div>
+              </div>
+              {hasData ? (
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>
+                  {arcs.length > 0 && <span>{arcs.length} arc{arcs.length > 1 ? "s" : ""} · </span>}
+                  {d.sleepHours && <span>{d.sleepHours}h sleep · </span>}
+                  {d.skills !== "" && <span>Skills: {d.skills}/7</span>}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: isToday ? "var(--accent)" : "var(--border)", marginTop: 3 }}>{isToday ? "Tap to log today" : "Not started"}</div>
+              )}
+            </div>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: hasData ? "var(--accent)" : "var(--border)", flexShrink: 0 }} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const TABS = [
+  { id: "Week", icon: "📋" },
+  { id: "Feelings", icon: "💭" },
+  { id: "Insights", icon: "📊" },
+  { id: "Report", icon: "📄" },
+  { id: "Settings", icon: "⚙️" },
+];
+
+function App() {
+  const [appData, setAppData] = useState(null);
+  const [activeWeekIdx, setActiveWeekIdx] = useState(0);
+  const [activeDay, setActiveDay] = useState(null);
+  const [tab, setTab] = useState("Week");
+  const [feelingsSub, setFeelingsSub] = useState("Feelings");
+  const [insightsSub, setInsightsSub] = useState("Trends");
+  const [saving, setSaving] = useState(false);
+
+  const saveRef = useRef(null);
+  const appDataRef = useRef(null);
+
+  useEffect(() => {
+    const handleHide = () => {
+      if (document.visibilityState === "hidden" && appDataRef.current) {
+        if (saveRef.current) { clearTimeout(saveRef.current); saveRef.current = null; }
+        saveData(appDataRef.current);
+      }
+    };
+    document.addEventListener("visibilitychange", handleHide);
+    return () => document.removeEventListener("visibilitychange", handleHide);
+  }, []);
+
+  const applyRollover = (data) => {
+    const today = localDateStr(new Date());
+    let weeks = [...data.weeks];
+    let rolled = 0;
+    while (rolled < 52) {
+      const last = weeks[weeks.length - 1];
+      const nextMonday = parseLocalDate(last.weekStart);
+      nextMonday.setDate(nextMonday.getDate() + 7);
+      if (today >= localDateStr(nextMonday)) {
+        const w = emptyWeek(data.settings.trackedEmotions || DEFAULT_EMOTIONS, data.settings.targetBehavior || "");
+        w.weekStart = localDateStr(nextMonday);
+        if (last.skillsProgress) w.skillsProgress = JSON.parse(JSON.stringify(last.skillsProgress));
+        if (last.customEmotionQuadrants) w.customEmotionQuadrants = { ...last.customEmotionQuadrants };
+        weeks = [...weeks, w];
+        rolled++;
+      } else { break; }
+    }
+    return { newData: { ...data, weeks }, rolled };
+  };
+
+  useEffect(() => {
+    loadData().then(data => {
+      if (!data) {
+        const w = emptyWeek(DEFAULT_EMOTIONS, "");
+        setAppData({ settings: { trackedEmotions: DEFAULT_EMOTIONS, targetBehavior: "", journalSkills: DEFAULT_JOURNAL_SKILLS, timeCategories: DEFAULT_TIME_CATEGORIES }, weeks: [w] });
+        setActiveWeekIdx(0);
+        return;
+      }
+      if (!data.settings.journalSkills) data.settings.journalSkills = DEFAULT_JOURNAL_SKILLS;
+      if (!data.settings.timeCategories) data.settings.timeCategories = DEFAULT_TIME_CATEGORIES;
+      const { newData, rolled } = applyRollover(data);
+      setAppData(newData);
+      if (rolled > 0) saveData(newData);
+      setActiveWeekIdx(newData.weeks.length - 1);
+    });
+  }, []);
+
+  useEffect(() => { appDataRef.current = appData; }, [appData]);
+
+  const persist = (updated) => {
+    setAppData(updated);
+    setSaving(true);
+    if (saveRef.current) clearTimeout(saveRef.current);
+    saveRef.current = setTimeout(async () => { await saveData(updated); setSaving(false); }, 400);
+  };
+
+  const flushSave = () => {
+    if (saveRef.current && appDataRef.current) { clearTimeout(saveRef.current); saveRef.current = null; saveData(appDataRef.current).then(() => setSaving(false)); }
+  };
+
+  const currentWeek = appData?.weeks[activeWeekIdx];
+
+  const updateDay = (day, dayData) => {
+    const weeks = [...appData.weeks];
+    weeks[activeWeekIdx] = { ...currentWeek, days: { ...currentWeek.days, [day]: dayData } };
+    persist({ ...appData, weeks });
+  };
+
+  const updateSettings = (newSettings) => {
+    const weeks = [...appData.weeks];
+    weeks[activeWeekIdx] = { ...currentWeek, targetBehavior: newSettings.targetBehavior, trackedEmotions: newSettings.trackedEmotions };
+    persist({ ...appData, settings: { ...appData.settings, ...newSettings }, weeks });
+  };
+
+  const updateSkillsProgress = (sp) => {
+    const weeks = [...appData.weeks];
+    weeks[activeWeekIdx] = { ...currentWeek, skillsProgress: sp };
+    persist({ ...appData, weeks });
+  };
+
+  if (!appData) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#ede8df", color: "#9e8e7e", fontFamily: "sans-serif" }}>Loading…</div>
+  );
+
+  return (
+    <>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap'); :root { --bg: #ede8df; --card: #f5f0e8; --surface: #e8e1d5; --border: #d4c9b8; --fg: #4a3f32; --fg-soft: #6b5c4a; --muted: #9e8e7e; --accent: #7a9e87; --display: 'Lora', serif; --body: 'DM Sans', sans-serif; --mono: 'DM Mono', monospace; } * { box-sizing: border-box; margin: 0; padding: 0; } body { background: var(--bg); font-family: var(--body); color: var(--fg); } input, select, textarea { outline: none; color: var(--fg); font-family: var(--body); } input:focus, select:focus, textarea:focus { border-color: var(--accent) !important; } input[type=range] { -webkit-appearance: none; height: 4px; background: var(--border); border-radius: 2px; border: none !important; } input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.12); } button { font-family: var(--body); } select { appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239e8e7e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px !important; } @media print { .no-print { display: none !important; } body { background: #fff !important; } }`}</style>
+
+      <div style={{ maxWidth: 520, margin: "0 auto", minHeight: "100vh", display: "flex", flexDirection: "column", paddingBottom: 84 }}>
+        <div style={{ padding: "20px 18px 14px", position: "sticky", top: 0, zIndex: 10, background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontFamily: "var(--display)", fontSize: 22, color: "var(--fg)", fontStyle: "italic" }}>DBT Diary Card</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", letterSpacing: "0.06em", marginTop: 2 }}>
+                Week of {currentWeek?.weekStart || "—"}
+                {saving && <span style={{ color: "var(--accent)", marginLeft: 8 }}>saving…</span>}
+              </div>
+            </div>
+            {activeDay && tab === "Week" && (
+              <button onClick={() => setActiveDay(null)} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: "6px 14px", color: "var(--muted)", fontSize: 13, cursor: "pointer" }}>← Week</button>
+            )}
+          </div>
+          {appData.weeks.length > 1 && tab === "Week" && !activeDay && (
+            <div style={{ display: "flex", gap: 6, marginTop: 10, overflowX: "auto", paddingBottom: 2 }}>
+              {appData.weeks.map((w, i) => {
+                const isCurrentWeek = i === appData.weeks.length - 1;
+                const d = parseLocalDate(w.weekStart);
+                const label = isCurrentWeek ? "This week" : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                return (
+                  <button key={i} onClick={() => { setActiveWeekIdx(i); setActiveDay(null); }} style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, border: "1.5px solid", cursor: "pointer", borderColor: i === activeWeekIdx ? "var(--accent)" : "var(--border)", background: i === activeWeekIdx ? "var(--accent)" : "transparent", color: i === activeWeekIdx ? "#fff" : "var(--muted)" }}>{label}</button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ flex: 1, padding: "16px 18px 20px" }}>
+          {tab === "Week" && !activeDay && <WeekOverview week={currentWeek} onSelectDay={d => setActiveDay(d)} />}
+          {tab === "Week" && activeDay && (
+            <DayEntry
+              dayFull={DAY_FULL[DAYS.indexOf(activeDay)]}
+              dayDate={(() => { const ws = parseLocalDate(currentWeek.weekStart); ws.setDate(ws.getDate() + DAYS.indexOf(activeDay)); return (ws.getMonth()+1)+"/"+ws.getDate(); })()}
+              data={currentWeek.days[activeDay]}
+              targetBehavior={currentWeek.targetBehavior || ""}
+              customEmotionQuadrants={currentWeek.customEmotionQuadrants || {}}
+              journalSkills={appData.settings.journalSkills || DEFAULT_JOURNAL_SKILLS}
+              timeCategories={appData.settings.timeCategories || DEFAULT_TIME_CATEGORIES}
+              onAddCustomEmotion={(name, quadrant) => {
+                const weeks = appData.weeks.map((w, i) => { if (i !== activeWeekIdx) return w; const cq = { ...(w.customEmotionQuadrants || {}), [name]: quadrant }; return { ...w, customEmotionQuadrants: cq }; });
+                persist({ ...appData, weeks });
+              }}
+              onChange={d => updateDay(activeDay, d)}
+              onFlush={flushSave}
+            />
+          )}
+          {tab === "Feelings" && (
+            <>
+              <Segmented options={["Feelings", "Skills"]} value={feelingsSub} onChange={setFeelingsSub} />
+              {feelingsSub === "Feelings" ? <FeelingsWheel /> : <SkillsReference />}
+            </>
+          )}
+          {tab === "Insights" && (
+            <>
+              <Segmented options={["Trends", "Progress"]} value={insightsSub} onChange={setInsightsSub} />
+              {insightsSub === "Trends" ? <TrendsDashboard weeks={appData.weeks} /> : <SkillsProgress progress={currentWeek.skillsProgress || emptySkillsProgress()} onChange={updateSkillsProgress} />}
+            </>
+          )}
+          {tab === "Report" && <WeekReport week={currentWeek} customMap={currentWeek.customEmotionQuadrants || {}} />}
+          {tab === "Settings" && (
+            <Settings
+              settings={{ trackedEmotions: currentWeek.trackedEmotions || appData.settings.trackedEmotions, targetBehavior: currentWeek.targetBehavior || "", journalSkills: appData.settings.journalSkills || DEFAULT_JOURNAL_SKILLS, timeCategories: appData.settings.timeCategories || DEFAULT_TIME_CATEGORIES }}
+              onSave={updateSettings}
+              onExport={() => {
+                const json = JSON.stringify(appData);
+                navigator.clipboard.writeText(json).catch(() => { const ta = document.createElement("textarea"); ta.value = json; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); });
+                alert("Data copied to clipboard. Paste it into the new app version using Import Data.");
+              }}
+              onImport={(json) => {
+                try {
+                  const parsed = JSON.parse(json);
+                  if (!parsed.weeks || !parsed.settings) { alert("Invalid data — make sure you copied the full export."); return; }
+                  if (!parsed.settings.journalSkills) parsed.settings.journalSkills = DEFAULT_JOURNAL_SKILLS;
+                  if (!parsed.settings.timeCategories) parsed.settings.timeCategories = DEFAULT_TIME_CATEGORIES;
+                  const { newData, rolled } = applyRollover(parsed);
+                  persist(newData);
+                  if (rolled > 0) saveData(newData);
+                  setActiveWeekIdx(newData.weeks.length - 1);
+                  setActiveDay(null);
+                  alert("Data imported successfully!");
+                } catch(e) { alert("Import failed — invalid format."); }
+              }}
+            />
+          )}
+        </div>
+
+        <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 520, background: "var(--card)", borderTop: "1px solid var(--border)", display: "flex", padding: "10px 0 24px" }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); if (t.id !== "Week") setActiveDay(null); }} style={{ flex: 1, background: "transparent", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: tab === t.id ? "var(--accent)" : "var(--muted)", fontWeight: tab === t.id ? 700 : 500, fontSize: 11, padding: "4px 0" }}>
+              <span style={{ fontSize: 22 }}>{t.icon}</span>
+              {t.id}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
 </body>
 </html>
