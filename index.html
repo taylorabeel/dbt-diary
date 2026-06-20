@@ -41,11 +41,11 @@ const MOOD_METER = {
   red:    { label: "High Energy",  sublabel: "Unpleasant", color: "#c0513a", bg: "#f5e8e6",
     emotions: ["Anger","Annoyed","Anxious","Apprehensive","Concerned","Contempt","Enraged","Fear","Frightened","Frustrated","Fuming","Furious","Irritated","Jittery","Livid","Nervous","Overwhelmed","Pain","Panicked","Peeved","Repulsed","Restless","Shame","Shocked","Stressed","Stunned","Tense","Troubled","Uneasy","Worried"] },
   yellow: { label: "High Energy",  sublabel: "Pleasant",   color: "#b8922a", bg: "#faf3e0",
-    emotions: ["Blissful","Cheerful","Ecstatic","Elated","Energized","Enthusiastic","Excited","Exhilarated","Festive","Focused","Happy","Hopeful","Hyper","Inspired","Joy","Lively","Motivated","Optimistic","Playful","Pleasant","Pleased","Pride","Surprised","Thrilled","Upbeat"] },
+    emotions: ["Blissful","Cheerful","Ecstatic","Elated","Energized","Enthusiastic","Excited","Exhilarated","Festive","Happy","Hopeful","Hyper","Inspired","Joy","Lively","Motivated","Optimistic","Playful","Pleasant","Pleased","Pride","Surprised","Thrilled","Upbeat"] },
   blue:   { label: "Low Energy",   sublabel: "Unpleasant", color: "#4a7aaa", bg: "#e8eef5",
     emotions: ["Alienated","Ambivalent","Apathetic","Bored","Depressed","Desolate","Despairing","Despondent","Disappointed","Discouraged","Disgusted","Disheartened","Down","Drained","Exhausted","Fatigued","Glum","Hopeless","Lonely","Miserable","Morose","Numb","Pessimistic","Sad","Spent","Sullen","Tired"] },
   green:  { label: "Low Energy",   sublabel: "Pleasant",   color: "#4a8a5e", bg: "#e6f0eb",
-    emotions: ["At Ease","Balanced","Blessed","Calm","Carefree","Chill","Comfortable","Complacent","Content","Cozy","Easygoing","Fulfilled","Grateful","Loving","Mellow","Peaceful","Relaxed","Restful","Satisfied","Secure","Serene","Sleepy","Thoughtful","Touched","Tranquil"] },
+    emotions: ["At Ease","Balanced","Blessed","Calm","Carefree","Chill","Comfortable","Complacent","Content","Cozy","Easygoing","Focused","Fulfilled","Grateful","Loving","Mellow","Peaceful","Relaxed","Restful","Satisfied","Secure","Serene","Sleepy","Thoughtful","Touched","Tranquil"] },
 };
 
 const EMOTION_TO_QUADRANT = (() => {
@@ -97,13 +97,40 @@ const AFTER_TYPES = ["Thought", "Action", "Skill", "Meditation", "Distraction", 
 
 const DEFAULT_TIME_CATEGORIES = [
   { name: "Work / Shoots", color: "#b08a6e" },
-  { name: "Family", color: "#c8a84b" },
-  { name: "Connection", color: "#7a9e87" },
+  { name: "Family – Connect", color: "#c8a84b" },
+  { name: "Family – Duty", color: "#a98a4b" },
+  { name: "Friends / Connection", color: "#7a9e87" },
   { name: "Outdoor / Vitality", color: "#4a8a5e" },
+  { name: "Driving / Commute", color: "#6e7c8a" },
   { name: "Admin / Drains", color: "#c0513a" },
   { name: "Rest", color: "#8a7eb0" },
-  { name: "Sleep", color: "#4a7aaa" },
 ];
+
+// Maps duration enum to a relative curve-width factor (shorter event = shorter curve).
+const DURATION_WIDTH = { "A few min": 0.28, "~20 min": 0.45, "~1 hour": 0.62, "A few hours": 0.82, "Most of the day": 1 };
+
+// Catmull-Rom -> Bezier smooth path through an array of [x,y] points.
+// k = smoothing (0 = straight segments, 1 = fully rounded).
+function smoothPath(pts, k = 1) {
+  if (pts.length < 2) return "";
+  if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + ((p2[0] - p0[0]) / 6) * k;
+    const c1y = p1[1] + ((p2[1] - p0[1]) / 6) * k;
+    const c2x = p2[0] - ((p3[0] - p1[0]) / 6) * k;
+    const c2y = p2[1] - ((p3[1] - p1[1]) / 6) * k;
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+// Peak x-fraction from a 0–100 slider; onset sets apex sharpness.
+function peakFraction(peakPos) { const p = peakPos === "" || peakPos === undefined ? 50 : Number(peakPos); return 0.15 + (p / 100) * 0.7; }
+function onsetSmoothing(onset) { return onset === "Spike" ? 0.35 : 1; }
 
 const SKILLS_REFERENCE = [
   {
@@ -352,6 +379,73 @@ async function generateDiaryPdf(week, emotions, customMap) {
     y = doc.lastAutoTable.finalY + 16;
   }
 
+  // --- Trends: quadrant breakdown ---
+  const qLabels = { red: "High Energy · Unpleasant", yellow: "High Energy · Pleasant", blue: "Low Energy · Unpleasant", green: "Low Energy · Pleasant" };
+  const qCounts = { red: 0, yellow: 0, blue: 0, green: 0 };
+  let qTotal = 0;
+  DAYS.forEach(day => {
+    const ems = week.days[day]?.emotions || {};
+    for (const [em, val] of Object.entries(ems)) {
+      if (Number(val) > 0) {
+        const q = EMOTION_TO_QUADRANT[em] || (customMap || {})[em];
+        if (q && qCounts[q] !== undefined) { qCounts[q]++; qTotal++; }
+      }
+    }
+  });
+  if (qTotal > 0) {
+    ensureSpace(40);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(26, 26, 26);
+    doc.text("Quadrant Breakdown", margin, y); y += 6;
+    doc.setFont("helvetica", "italic"); doc.setFontSize(8.5); doc.setTextColor(102, 102, 102);
+    doc.text("Share of emotion check-ins across the week by Mood Meter quadrant.", margin, y); y += 12;
+    const qRows = ["red", "yellow", "blue", "green"].map(k => [qLabels[k], String(qCounts[k]), Math.round((qCounts[k] / qTotal) * 100) + "%"]);
+    doc.autoTable({
+      startY: y,
+      head: [["Quadrant", "Check-ins", "Share"]],
+      body: qRows,
+      styles: { font: "helvetica", fontSize: 9.5, cellPadding: 5, lineColor: [217, 212, 199], lineWidth: 0.4, textColor: [34, 34, 34] },
+      headStyles: { fillColor: [58, 58, 58], textColor: 255, fontStyle: "bold", cellPadding: 6 },
+      alternateRowStyles: { fillColor: [247, 246, 243] },
+      columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 70, halign: "center" }, 2: { cellWidth: 60, halign: "center" } },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 16;
+  }
+
+  // --- Trends: what moves the needle (intervention effectiveness from arcs) ---
+  const interv = {};
+  DAYS.forEach(day => {
+    (week.days[day]?.emotionArcs || []).forEach(a => {
+      if (!a.afterType) return;
+      const pk = Number(a.peak), en = Number(a.end);
+      if (!pk || !en) return;
+      if (!interv[a.afterType]) interv[a.afterType] = { delta: 0, n: 0 };
+      interv[a.afterType].delta += (en - pk); interv[a.afterType].n++;
+    });
+  });
+  const intervRows = Object.entries(interv)
+    .map(([k, v]) => ({ k, avg: v.delta / v.n, n: v.n }))
+    .sort((a, b) => a.avg - b.avg)
+    .map(r => [r.k, (r.avg > 0 ? "+" : "") + r.avg.toFixed(1), String(r.n)]);
+  if (intervRows.length) {
+    ensureSpace(40);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(26, 26, 26);
+    doc.text("What Moves the Needle", margin, y); y += 6;
+    doc.setFont("helvetica", "italic"); doc.setFontSize(8.5); doc.setTextColor(102, 102, 102);
+    doc.text("Average intensity change (peak -> end) by what was tried. More negative = brought the feeling down more.", margin, y); y += 12;
+    doc.autoTable({
+      startY: y,
+      head: [["What was tried", "Avg change (peak->end)", "Times used"]],
+      body: intervRows,
+      styles: { font: "helvetica", fontSize: 9.5, cellPadding: 5, lineColor: [217, 212, 199], lineWidth: 0.4, textColor: [34, 34, 34] },
+      headStyles: { fillColor: [122, 110, 92], textColor: 255, fontStyle: "bold", cellPadding: 6 },
+      alternateRowStyles: { fillColor: [247, 246, 243] },
+      columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 130, halign: "center" }, 2: { cellWidth: 70, halign: "center" } },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 16;
+  }
+
   const sp = week.skillsProgress || {};
   const ratedMods = SKILLS_PROGRESS_MODULES.filter(m => (sp[m.key] || {}).capacity || (sp[m.key] || {}).confidence);
   if (ratedMods.length || sp.mostConfident || sp.wantToGrow) {
@@ -544,21 +638,42 @@ function Segmented({ options, value, onChange }) {
   );
 }
 
-function ArcMini({ arc, color, width = 120, height = 44 }) {
-  const pts = [arc.start, arc.peak, arc.end].map(v => Number(v) || 0);
-  if (pts.every(v => v === 0)) {
+function Collapsible({ title, color, summary, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", textAlign: "left", fontFamily: "var(--body)" }}>
+        <span style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: color || "var(--accent)" }}>{title}</span>
+          {!open && summary && <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{summary}</span>}
+        </span>
+        <span style={{ fontSize: 16, color: color || "var(--accent)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0, marginLeft: 8 }}>⌄</span>
+      </button>
+      {open && <div style={{ marginTop: 14 }}>{children}</div>}
+    </Card>
+  );
+}
+
+function ArcMini({ arc, color, width = 150, height = 52 }) {
+  const s = Number(arc.start) || 0, p = Number(arc.peak) || 0, e = Number(arc.end) || 0;
+  if (s === 0 && p === 0 && e === 0) {
     return <div style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>Set start · peak · end to see the arc</div>;
   }
   const pad = 6;
-  const xs = [pad, width / 2, width - pad];
-  const ys = pts.map(v => height - pad - (v / 5) * (height - 2 * pad));
-  const poly = xs.map((x, i) => `${x},${ys[i]}`).join(" ");
+  const durW = (DURATION_WIDTH[arc.duration] || 0.62);
+  const usableW = (width - 2 * pad) * durW;
+  const x0 = pad, x2 = pad + usableW;
+  const xp = x0 + (x2 - x0) * peakFraction(arc.peakPos);
+  const yFor = v => height - pad - (((v || 1) - 1) / 4) * (height - 2 * pad);
+  const pts = [[x0, yFor(s || 1)], [xp, yFor(p || 1)], [x2, yFor(e || 1)]];
+  const d = smoothPath(pts, onsetSmoothing(arc.onset));
   return (
-    <svg width={width} height={height} style={{ overflow: "visible" }}>
+    <svg width={width} height={height + 12} style={{ overflow: "visible" }}>
       <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} stroke="var(--border)" strokeWidth="1" />
-      <polyline points={poly} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {xs.map((x, i) => <circle key={i} cx={x} cy={ys[i]} r="3.5" fill={color} />)}
-      {["S", "P", "E"].map((lbl, i) => <text key={i} x={xs[i]} y={height + 2} textAnchor="middle" fontSize="8" fill="#9e8e7e">{lbl}{pts[i] ? " " + pts[i] : ""}</text>)}
+      <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {pts.map((pt, i) => <circle key={i} cx={pt[0]} cy={pt[1]} r="3.5" fill={color} opacity={i === 1 ? 1 : 0.7} />)}
+      <text x={x0} y={height + 8} textAnchor="middle" fontSize="8" fill="#9e8e7e">start</text>
+      <text x={x2} y={height + 8} textAnchor="middle" fontSize="8" fill="#9e8e7e">end</text>
     </svg>
   );
 }
@@ -568,24 +683,26 @@ function DayArcWave({ arcs, customMap, height = 130 }) {
   if (!valid.length) return null;
   const width = 340, padX = 20, padY = 16;
   const slot = (width - 2 * padX) / valid.length;
-  const yFor = v => height - padY - ((Number(v) || 0) / 5) * (height - 2 * padY);
+  const yFor = v => height - padY - (((v || 1) - 1) / 4) * (height - 2 * padY);
   return (
     <svg width="100%" viewBox={`0 0 ${width} ${height + 16}`} style={{ overflow: "visible" }}>
-      {[0, 1, 2, 3, 4, 5].map(g => {
+      {[1, 2, 3, 4, 5].map(g => {
         const yy = yFor(g);
         return <g key={g}><line x1={padX} y1={yy} x2={width - padX} y2={yy} stroke="var(--border)" strokeWidth="0.5" opacity="0.6" /><text x={padX - 4} y={yy + 3} textAnchor="end" fontSize="7" fill="#9e8e7e">{g}</text></g>;
       })}
       {valid.map((a, i) => {
         const color = quadrantColor(a.emotion, customMap);
         const cx = padX + slot * i + slot / 2;
-        const x0 = cx - slot * 0.32, x1 = cx, x2 = cx + slot * 0.32;
-        const y0 = yFor(a.start), y1 = yFor(a.peak), y2 = yFor(a.end);
+        const durW = (DURATION_WIDTH[a.duration] || 0.62);
+        const half = (slot * 0.42) * durW;
+        const x0 = cx - half, x2 = cx + half;
+        const xp = x0 + (x2 - x0) * peakFraction(a.peakPos);
+        const pts = [[x0, yFor(a.start || 1)], [xp, yFor(a.peak || 1)], [x2, yFor(a.end || 1)]];
+        const d = smoothPath(pts, onsetSmoothing(a.onset));
         return (
           <g key={i}>
-            <polyline points={`${x0},${y0} ${x1},${y1} ${x2},${y2}`} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx={x0} cy={y0} r="3" fill={color} opacity="0.65" />
-            <circle cx={x1} cy={y1} r="3.5" fill={color} />
-            <circle cx={x2} cy={y2} r="3" fill={color} opacity="0.65" />
+            <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx={xp} cy={yFor(a.peak || 1)} r="3.5" fill={color} />
             <text x={cx} y={height + 6} textAnchor="middle" fontSize="8" fill={color} fontWeight="600">{a.emotion ? a.emotion.slice(0, 8) : "—"}</text>
           </g>
         );
@@ -597,7 +714,7 @@ function DayArcWave({ arcs, customMap, height = 130 }) {
 function EmotionArcs({ arcs, customMap, journalSkills, onChange }) {
   const update = (id, patch) => onChange(arcs.map(a => a.id === id ? { ...a, ...patch } : a));
   const remove = (id) => onChange(arcs.filter(a => a.id !== id));
-  const add = () => onChange([...arcs, { id: uid(), emotion: "", before: "", onset: "", start: "", peak: "", end: "", duration: "", afterType: "", afterDetail: "" }]);
+  const add = () => onChange([...arcs, { id: uid(), emotion: "", before: "", onset: "", start: "", peak: "", end: "", duration: "", peakPos: "50", afterType: "", afterDetail: "" }]);
   const hasPositive = arcs.some(a => POSITIVE_QUADRANTS.includes(quadrantOf(a.emotion, customMap)));
   const skillList = (journalSkills && journalSkills.length) ? journalSkills : DEFAULT_JOURNAL_SKILLS;
 
@@ -654,9 +771,17 @@ function EmotionArcs({ arcs, customMap, journalSkills, onChange }) {
                   <SliderInput label="Peak" value={a.peak} max={5} min={1} accent={color} onChange={v => update(a.id, { peak: v })} />
                   <SliderInput label="End" value={a.end} max={5} min={1} accent={color} onChange={v => update(a.id, { end: v })} />
                 </div>
-                <div style={{ marginTop: 10, display: "flex", justifyContent: "center" }}>
+                <div style={{ marginTop: 14 }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 5 }}>When did it peak?</span>
+                  <input type="range" min={0} max={100} step={5} value={a.peakPos === "" || a.peakPos === undefined ? 50 : Number(a.peakPos)} onChange={e => update(a.id, { peakPos: e.target.value })} style={{ width: "100%", accentColor: color }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--muted)", marginTop: 2 }}>
+                    <span>Early (spike + tail)</span><span>Middle</span><span>Late (slow build)</span>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
                   <ArcMini arc={a} color={color} />
                 </div>
+                <div style={{ fontSize: 10, color: "var(--muted)", textAlign: "center", marginTop: 2, fontStyle: "italic" }}>Curve length follows duration · sharpness follows onset</div>
               </div>
               <div>
                 <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>How long did it last?</span>
@@ -713,21 +838,41 @@ function EmotionArcs({ arcs, customMap, journalSkills, onChange }) {
   );
 }
 
+// Waking window = first block start -> last block end. Everything outside is inferred sleep.
+function inferredSleep(blocks) {
+  const ivals = [];
+  blocks.forEach(b => {
+    const s = hmToHours(b.start), e = hmToHours(b.end);
+    if (s === null || e === null || blockHours(b) <= 0) return;
+    if (e > s) ivals.push([s, e]); else { ivals.push([s, 24]); ivals.push([0, e]); }
+  });
+  if (!ivals.length) return null;
+  const firstStart = Math.min(...ivals.map(v => v[0]));
+  const lastEnd = Math.max(...ivals.map(v => v[1]));
+  const hours = Math.max(0, firstStart) + Math.max(0, 24 - lastEnd);
+  return { firstStart, lastEnd, hours };
+}
+
 function DayTimeBar({ blocks, categories }) {
-  const valid = blocks.filter(b => blockHours(b) > 0 && hmToHours(b.start) !== null);
+  const valid = blocks.filter(b => blockHours(b) > 0 && hmToHours(b.start) !== null && hmToHours(b.end) !== null);
   if (!valid.length) return null;
   const colorFor = (name) => (categories.find(c => c.name === name) || {}).color || "#9e8e7e";
   const width = 340, h = 26, padX = 6;
   const span = width - 2 * padX;
   const xFor = hr => padX + (hr / 24) * span;
+  const sleep = inferredSleep(valid);
+  const segs = [];
+  valid.forEach(b => {
+    const s = hmToHours(b.start), e = hmToHours(b.end), col = colorFor(b.category);
+    if (e > s) segs.push([s, e, col]);
+    else { segs.push([s, 24, col]); segs.push([0, e, col]); }
+  });
   return (
     <svg width="100%" viewBox={`0 0 ${width} ${h + 14}`}>
       <rect x={padX} y={2} width={span} height={h} rx={5} fill="var(--surface)" />
-      {valid.map((b, i) => {
-        const s = hmToHours(b.start);
-        const w = (blockHours(b) / 24) * span;
-        return <rect key={i} x={xFor(s)} y={2} width={Math.max(w, 1.5)} height={h} rx={2} fill={colorFor(b.category)} opacity="0.92" />;
-      })}
+      {sleep && sleep.firstStart > 0 && <rect x={xFor(0)} y={2} width={(sleep.firstStart / 24) * span} height={h} fill="#4a7aaa" opacity="0.35" />}
+      {sleep && sleep.lastEnd < 24 && <rect x={xFor(sleep.lastEnd)} y={2} width={((24 - sleep.lastEnd) / 24) * span} height={h} fill="#4a7aaa" opacity="0.35" />}
+      {segs.map((sg, i) => <rect key={i} x={xFor(sg[0])} y={2} width={Math.max(((sg[1] - sg[0]) / 24) * span, 1.5)} height={h} rx={2} fill={sg[2]} opacity="0.92" />)}
       {[0, 6, 12, 18, 24].map(t => (
         <g key={t}>
           <line x1={xFor(t)} y1={2} x2={xFor(t)} y2={h + 2} stroke="var(--border)" strokeWidth="0.5" />
@@ -753,16 +898,24 @@ function TimeBlocks({ blocks, categories, onChange }) {
   const totals = {};
   let total = 0;
   blocks.forEach(b => { const hh = blockHours(b); if (hh > 0 && b.category) { totals[b.category] = (totals[b.category] || 0) + hh; total += hh; } });
+  const sleep = inferredSleep(blocks);
+  const hLabel = (hr) => { let x = hr % 24; const h = Math.floor(x), m = Math.round((x - h) * 60); const ap = h < 12 ? "a" : "p"; let hh = h % 12; if (hh === 0) hh = 12; return hh + (m ? ":" + String(m).padStart(2, "0") : "") + ap; };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ background: "var(--surface)", borderRadius: 8, padding: "9px 11px", fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>
-        Rebuild your day as a few <strong style={{ color: "var(--fg-soft)" }}>blocks</strong> — start to end, what it was, and whether it drained or restored you. A diagnostic to find margin, not a forever habit.
+        Rebuild your day as a few <strong style={{ color: "var(--fg-soft)" }}>blocks</strong> — start to end, what it was, drained or restored. Your <strong style={{ color: "var(--fg-soft)" }}>first block is wake, your last is bedtime</strong>; everything outside fills in as sleep automatically.
       </div>
 
       {blocks.length > 0 && (
         <div style={{ background: "var(--card)", borderRadius: 12, padding: "12px 10px 4px", border: "1px solid var(--border)" }}>
           <DayTimeBar blocks={blocks} categories={cats} />
+          {sleep && sleep.hours > 0.1 && (
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#4a7aaa", marginTop: 4, display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: "#4a7aaa", opacity: 0.6, display: "inline-block" }} />
+              Sleep ~{sleep.hours.toFixed(1)}h <span style={{ color: "var(--muted)", fontWeight: 400 }}>· asleep after {hLabel(sleep.lastEnd)}, up by {hLabel(sleep.firstStart)}</span>
+            </div>
+          )}
           {total > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
               {Object.entries(totals).sort((a, b) => b[1] - a[1]).map(([name, hrs]) => {
@@ -852,6 +1005,9 @@ function DayEntry({ dayFull, dayDate, data, targetBehavior, onChange, onFlush, c
   };
 
   const loggedEmotions = Object.keys(data.emotions || {});
+  const snapCount = Object.values(data.emotions || {}).filter(v => Number(v) > 0).length;
+  const arcCount = (data.emotionArcs || []).length;
+  const blockHrs = (data.timeBlocks || []).reduce((s, b) => s + blockHours(b), 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -860,8 +1016,7 @@ function DayEntry({ dayFull, dayDate, data, targetBehavior, onChange, onFlush, c
         {dayDate && <div style={{ fontSize: 14, color: "var(--muted)", fontFamily: "var(--mono)" }}>{dayDate}</div>}
       </div>
 
-      <Card>
-        <SectionLabel>Target Behavior</SectionLabel>
+      <Collapsible title="Target Behavior" defaultOpen={true} summary={`Urge ${data.targetUrge || 0}/5${data.targetDid ? (data.targetDid === "Y" ? " · acted" : " · resisted") : ""}`}>
         <div style={{ background: "var(--surface)", borderRadius: 8, padding: "8px 10px", marginBottom: 14, fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>
           <strong style={{ color: "var(--fg-soft)" }}>Urge</strong> = 0–5 &nbsp;·&nbsp; <strong style={{ color: "var(--fg-soft)" }}>Did it?</strong> = Y / N &nbsp;·&nbsp; <strong style={{ color: "var(--fg-soft)" }}>Meditation</strong> = mindful meditation today? Y / N
         </div>
@@ -881,10 +1036,9 @@ function DayEntry({ dayFull, dayDate, data, targetBehavior, onChange, onFlush, c
             </div>
           </div>
         </div>
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <SectionLabel>Emotion Snapshot (0–5)</SectionLabel>
+      <Collapsible title="Emotion Snapshot (0–5)" defaultOpen={true} summary={`${snapCount} tracked`}>
         <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 12, lineHeight: 1.5 }}>A quick read on how present each feeling was today. The deeper before→after work happens in the Arcs below.</div>
         {loggedEmotions.length === 0 && (
           <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic", marginBottom: 10 }}>No emotions logged yet. Use the picker below.</div>
@@ -954,20 +1108,17 @@ function DayEntry({ dayFull, dayDate, data, targetBehavior, onChange, onFlush, c
             </div>
           )}
         </div>
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <SectionLabel color="#b08a6e">Emotion Arcs</SectionLabel>
+      <Collapsible title="Emotion Arcs" color="#b08a6e" defaultOpen={false} summary={arcCount ? `${arcCount} arc${arcCount !== 1 ? "s" : ""} logged` : "none yet"}>
         <EmotionArcs arcs={data.emotionArcs || []} customMap={customEmotionQuadrants} journalSkills={journalSkills} onChange={arcs => onChange({ ...data, emotionArcs: arcs })} />
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <SectionLabel color="#4a8a5e">Time & Margin</SectionLabel>
+      <Collapsible title="Time & Margin" color="#4a8a5e" defaultOpen={false} summary={blockHrs > 0 ? `${blockHrs.toFixed(1)}h tracked` : "none yet"}>
         <TimeBlocks blocks={data.timeBlocks || []} categories={timeCategories} onChange={blocks => onChange({ ...data, timeBlocks: blocks })} />
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <SectionLabel color="#b08a6e">Sleep</SectionLabel>
+      <Collapsible title="Sleep" color="#b08a6e" defaultOpen={true} summary={data.sleepHours ? `${data.sleepHours}h${data.sleepQuality ? " · " + data.sleepQuality : ""}` : "—"}>
         <div style={{ display: "flex", gap: 12 }}>
           <div style={{ flex: 1 }}>
             <span style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", display: "block", marginBottom: 6 }}>Hours</span>
@@ -981,21 +1132,19 @@ function DayEntry({ dayFull, dayDate, data, targetBehavior, onChange, onFlush, c
             </select>
           </div>
         </div>
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <SectionLabel color="#8a7eb0">Skills Used (0–7)</SectionLabel>
+      <Collapsible title="Skills Used (0–7)" color="#8a7eb0" defaultOpen={true} summary={data.skills !== "" ? `${data.skills}/7` : "—"}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <SliderInput value={data.skills} max={7} onChange={v => set("skills", v)} />
           {data.skills !== "" && <span style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>{SKILLS_SCALE[Number(data.skills)]}</span>}
         </div>
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <SectionLabel color="#c8a84b">Daily Notes</SectionLabel>
+      <Collapsible title="Daily Notes" color="#c8a84b" defaultOpen={true} summary={data.journal && data.journal.trim() ? `${data.journal.trim().length} chars` : "empty"}>
         <span style={{ fontSize: 11, color: "var(--muted)", display: "block", marginBottom: 8, lineHeight: 1.5 }}>Thoughts, emotions, behaviors, body and environment — anything the structured fields didn't catch.</span>
         <textarea rows={9} placeholder="What happened? What did you notice? What did you feel?" value={data.journal} onChange={e => set("journal", e.target.value)} onBlur={onFlush} style={{ width: "100%", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: 8, padding: "10px 12px", color: "var(--fg)", fontSize: 14, lineHeight: 1.6, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", minHeight: 180 }} />
-      </Card>
+      </Collapsible>
     </div>
   );
 }
